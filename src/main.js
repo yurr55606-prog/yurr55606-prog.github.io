@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import blackholeCinematicUrl from './assets/blackhole/blackhole-cinematic-v8.png?url';
+import astronautIdleUrl from './assets/character/astronaut-idle.png?url';
+import astronautWaveUrl from './assets/character/astronaut-wave.png?url';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -163,7 +166,7 @@ async function initBlackHole() {
   blackholeRenderer.toneMappingExposure = 0.96;
   blackholeScene = new THREE.Scene();
   blackholeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const cinematicBase = await new THREE.TextureLoader().loadAsync('/assets/blackhole-cinematic-v8.png');
+  const cinematicBase = await new THREE.TextureLoader().loadAsync(blackholeCinematicUrl);
   cinematicBase.colorSpace = THREE.SRGBColorSpace;
   cinematicBase.minFilter = THREE.LinearMipmapLinearFilter;
   cinematicBase.magFilter = THREE.LinearFilter;
@@ -1003,8 +1006,8 @@ function positionAstronautForViewport() {
 async function createAstronaut() {
   const loader = new THREE.TextureLoader();
   const [idleMap, waveMap] = await Promise.all([
-    loader.loadAsync('/assets/character/astronaut-idle.png'),
-    loader.loadAsync('/assets/character/astronaut-wave.png')
+    loader.loadAsync(astronautIdleUrl),
+    loader.loadAsync(astronautWaveUrl)
   ]);
   [idleMap, waveMap].forEach((texture) => {
     texture.colorSpace = THREE.SRGBColorSpace;

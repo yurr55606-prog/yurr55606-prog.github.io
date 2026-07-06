@@ -1,3 +1,21 @@
+const photoAssetUrls = import.meta.glob('./assets/gallery/*/*.jpg', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const videoAssetUrls = import.meta.glob('./assets/videos/**/*.{mp4,png}', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const resolveAsset = (catalog, path) => {
+  const url = catalog[path];
+  if (!url) throw new Error(`Missing protected asset: ${path}`);
+  return url;
+};
+
 export const categories = {
   plugin: {
     index: '01 / 03',
@@ -110,7 +128,10 @@ const makePhotoItems = (folder, prefix, count, excluded = []) => {
     .filter((number) => !excludedSet.has(number))
     .map((number) => ({
       id: `${folder}-${String(number).padStart(2, '0')}`,
-      src: `/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.jpg`
+      src: resolveAsset(
+        photoAssetUrls,
+        `./assets/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.jpg`
+      )
     }));
 };
 
@@ -134,10 +155,14 @@ export const photoAlbums = [
 ];
 
 export const videoItems = [
-  { id: 'video-01', src: '/videos/video-01.mp4', poster: '/videos/posters/video-01.png', duration: '00:41' },
-  { id: 'video-02', src: '/videos/video-02.mp4', poster: '/videos/posters/video-02.png', duration: '00:14' },
-  { id: 'video-03', src: '/videos/video-03.mp4', poster: '/videos/posters/video-03.png', duration: '00:26' },
-  { id: 'video-04', src: '/videos/video-04.mp4', poster: '/videos/posters/video-04.png', duration: '00:08' },
-  { id: 'video-05', src: '/videos/video-05.mp4', poster: '/videos/posters/video-05.png', duration: '02:59' },
-  { id: 'video-06', src: '/videos/video-06.mp4', poster: '/videos/posters/video-06.png', duration: '01:00' }
-];
+  { id: 'video-01', duration: '00:41' },
+  { id: 'video-02', duration: '00:14' },
+  { id: 'video-03', duration: '00:26' },
+  { id: 'video-04', duration: '00:08' },
+  { id: 'video-05', duration: '02:59' },
+  { id: 'video-06', duration: '01:00' }
+].map((item) => ({
+  ...item,
+  src: resolveAsset(videoAssetUrls, `./assets/videos/${item.id}.mp4`),
+  poster: resolveAsset(videoAssetUrls, `./assets/videos/posters/${item.id}.png`)
+}));
