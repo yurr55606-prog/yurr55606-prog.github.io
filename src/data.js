@@ -10,89 +10,159 @@ const videoAssetUrls = import.meta.glob('./assets/videos/**/*.{mp4,png}', {
   import: 'default'
 });
 
+const automationImageAssetUrls = import.meta.glob('./assets/automation/screens/*.png', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const automationVideoAssetLoaders = import.meta.glob('./assets/automation/videos/*.mp4', {
+  query: '?url',
+  import: 'default'
+});
+
 const resolveAsset = (catalog, path) => {
   const url = catalog[path];
   if (!url) throw new Error(`Missing protected asset: ${path}`);
   return url;
 };
 
+const automationAsset = (path) => resolveAsset(automationImageAssetUrls, `./assets/automation/${path}`);
+
+export const resolveAutomationVideo = async (path) => {
+  const loader = automationVideoAssetLoaders[`./assets/automation/${path}`];
+  if (!loader) throw new Error(`Missing automation video: ${path}`);
+  return loader();
+};
+
 export const categories = {
   plugin: {
     index: '01 / 03',
-    kicker: 'TOOLS AS IMAGINATION',
-    title: '插件作品',
-    description: '把重复劳动折叠成五件轻量工具，让采集、标注、下载、剪辑与评测回到清晰而可靠的工作流。',
+    kicker: 'AUTOMATION SYSTEMS',
+    title: '自动化',
+    description: '围绕 Chrome 扩展与本地浏览器工具，把采集、下载、标注、分镜、评测这些重复动作整理成稳定、可视化、可导出的自动化工作流。',
     accent: '#ffd49a',
     works: [
       {
         id: 'blobstore-key',
-        code: 'B',
-        version: '1.0.0',
-        title: 'BlobstoreKey 自动采集助手',
-        shortTitle: '自动采集助手',
-        tagline: '从网页与接口响应中，一键定位并保存 BlobstoreKey。',
-        type: 'DATA CAPTURE',
-        accent: '#d7e7ff',
-        what: '一款面向网页数据采集流程的 Chrome 扩展。它会扫描当前页面及相关接口响应中的 BlobstoreKey，并把结果写入插件内置记录。',
-        problem: 'BlobstoreKey 往往散落在页面结构或网络响应中。手动打开开发者工具逐条检索，不仅耗时，也容易漏记、重复记录或复制错误。',
-        result: '把“查找—复制—整理”压缩成一次扫描，让关键数据可追溯、可复用。',
-        steps: ['打开需要采集信息的目标网页。', '启动插件并执行当前页面与接口响应扫描。', '检查识别结果，确认后保存到插件内置记录。']
+        code: '🔑',
+        version: '1.2.0',
+        title: 'Key 自动采集助手',
+        shortTitle: 'Key 自动采集',
+        tagline: '从当前页面与接口响应中一键抓取 Key，并沉淀成可导出的记事本。',
+        type: 'CHROME EXTENSION',
+        accent: '#8b5cf6',
+        preview: automationAsset('screens/key-capture.png'),
+        what: '一款用于网页数据采集的 Chrome 扩展。它会扫描当前页面、页面源码与已捕获接口响应，把识别到的 Key 自动写入插件侧边栏，并支持手动补充。',
+        problem: '过去需要打开开发者工具、搜索接口、复制字段、再粘贴到表格里。这个流程很慢，也容易漏掉隐藏在响应里的 Key。',
+        result: '把“查找—复制—保存—导出”变成一个面板内的轻量流程。',
+        features: ['一键抓取当前页面', '接口响应扫描', '手动粘贴补录', '复制全部 / TXT / CSV 导出'],
+        steps: ['打开需要采集 Key 的网页。', '点击“一键抓取当前页面”，等待插件扫描页面与接口响应。', '复核记录，必要时手动添加 Key。', '一键复制全部，或导出 TXT / CSV。']
       },
       {
         id: 'vision-annotation',
-        code: '◎',
+        code: '🖼️',
         version: '2.4.0',
-        title: '视界标注 · 图片数据工作台',
-        shortTitle: '图片数据工作台',
-        tagline: '把网页图片与表格素材转化为可用的结构化视觉数据。',
-        type: 'MULTIMODAL AI',
-        accent: '#b9e8ff',
-        what: '一个支持网页抓取与表格批量导入的图片数据工作台。通过多模态 API，为图片自动生成摄影标签、内容描述与融合文案。',
-        problem: '图片收集、逐张理解、标签编写和文案整理通常分散在多个工具里；数量一多，命名不一致和人工重复劳动会迅速放大。',
-        result: '让图片从“散落素材”变成统一、可检索、可继续加工的数据资产。',
-        steps: ['抓取当前页面图片，或批量导入表格中的图片。', '配置多模态 API，并选择需要生成的标注内容。', '批量生成标签、描述与融合文案，复核后整理或导出。']
+        title: '图片描述 · 视界标注工作台',
+        shortTitle: '图片描述',
+        tagline: '把图片队列转化为镜头、焦距、色调、光影等结构化摄影语言。',
+        type: 'IMAGE ANNOTATION STUDIO',
+        accent: '#61a5ff',
+        preview: automationAsset('screens/image-annotation.png'),
+        videos: [
+          { label: '图片描述演示 · 男生素材', path: 'videos/video-description-demo-full.mp4' }
+        ],
+        what: '面向摄影图片与 AI 图像素材的标注工作台。支持拖入图片、导入表格、批量 AI 标注，并把视觉语言整理成可导出的 JSON / CSV。',
+        problem: '摄影素材往往数量多、标签维度复杂；如果全靠人工判断镜头、焦距、色调、光影和构图，效率低且标准不统一。',
+        result: '把“看图—判断—填写—复核”集中在同一界面里，让图片资产更容易检索和复用。',
+        features: ['图片队列管理', 'AI 智能标注', '镜头 / 焦距 / 色调 / 光影标签', 'JSON / CSV 导出'],
+        steps: ['拖入图片或 Excel / CSV 表格。', '选择需要标注的摄影维度。', '批量 AI 标注后逐张复核。', '完成后导出 JSON 或 CSV。']
       },
       {
         id: 'video-batch-download',
-        code: '↓',
+        code: '⬇️',
         version: '1.0.0',
         title: '视频批量下载助手',
         shortTitle: '视频批量下载',
-        tagline: '把多条视频直链，变成一次可追踪的并发下载任务。',
-        type: 'BATCH WORKFLOW',
-        accent: '#e9ddff',
-        what: '用于批量处理视频直链的下载工具。一次输入多条地址后，可并发执行任务，并持续显示每一条的成功或失败状态。',
+        tagline: '识别页面视频直链，并把多条链接变成可追踪的并发下载任务。',
+        type: 'BATCH VIDEO',
+        accent: '#8b5cf6',
+        preview: automationAsset('screens/video-batch-download.png'),
+        what: '面向网页视频素材收集的 Chrome 扩展。它可以识别当前页面中的视频链接，支持设置并发数、下载文件夹、任务重试和结果导出。',
         problem: '逐条打开链接、重复点击保存，既打断工作节奏，也很难确认大批任务中哪些已经完成、哪些需要重试。',
         result: '用一个清晰的任务面板替代重复操作，让批量下载的结果始终可见。',
-        steps: ['整理并粘贴需要下载的视频直链。', '检查任务列表后启动并发下载。', '查看成功与失败状态，并针对失败项目重新处理。']
+        features: ['当前页面链接识别', '并发下载控制', '失败任务重试', '结果 CSV 导出'],
+        steps: ['打开包含目标视频的页面。', '让插件自动识别视频直链，或手动粘贴链接。', '选择并发数与下载文件夹后开始任务。', '查看成功、进行中、失败、等待状态，并导出结果 CSV。']
       },
       {
         id: 'video-timestamp',
-        code: '⌁',
+        code: '⏱️',
         version: '1.1.0',
         title: '视频时间戳采集助手',
         shortTitle: '视频时间戳采集',
         tagline: '观看视频的同时，用快捷键留下准确的入点与出点。',
-        type: 'VIDEO INDEXING',
-        accent: '#ffd7bf',
+        type: 'VIDEO TIMESTAMP',
+        accent: '#22a7f0',
+        preview: automationAsset('screens/video-timestamp.png'),
         what: '一款针对网页视频的片段时间戳工具。播放过程中可用快捷键记录入点与出点，并在侧边栏集中管理、整理和导出片段。',
         problem: '依靠暂停、抄写时间码和手工整理片段，操作频繁且容易出现时间偏差；长视频或多片段任务尤其低效。',
         result: '让“观看—判断—标记”保持在同一节奏里，为剪辑、审核和内容拆条快速建立片段清单。',
-        steps: ['打开包含目标视频的网页并唤出插件侧边栏。', '播放视频，使用快捷键依次记录片段入点与出点。', '在侧边栏复核、调整并导出所需的时间戳记录。']
+        features: ['A / D / S 快捷键打点', '页面计时器', '入点出点片段管理', 'CSV 导出'],
+        steps: ['打开包含目标视频的网页并唤出插件侧边栏。', '播放视频，使用 A 记录入点、D 记录出点、S 保存片段。', '在侧边栏复核、调整并导出所需的时间戳记录。']
+      },
+      {
+        id: 'video-description',
+        code: '🎬',
+        version: '1.0.0',
+        title: '镜语分镜 · 视频描述工作台',
+        shortTitle: '视频描述',
+        tagline: '把 1 分钟内的视频拆成连续分镜，生成构图、主体、动作、运镜、色调与氛围描述。',
+        type: 'VIDEO DESCRIPTION STUDIO',
+        accent: '#5b6cff',
+        preview: automationAsset('screens/video-description.png'),
+        videos: [
+          { label: '分镜演示 · 完整流程', path: 'videos/video-description-demo.mp4' }
+        ],
+        what: '一个本地视频分镜描述工具。上传本地视频后，它会在浏览器中抽帧、切段，并按构图、主体、动作、运镜、色调、光影、环境、服饰、角度、氛围生成连续描述。',
+        problem: '视频描述常常依赖人工逐帧观看和手写总结。对短片、广告、素材库和模型训练来说，这会非常耗时，也很难保持描述结构一致。',
+        result: '把视频拆解成可复制、可导出的分镜语言，为剪辑复盘、素材检索和 AI 训练数据准备提供基础。',
+        features: ['本地视频处理', '自动分镜切段', '关键帧缩略图', '连续结构化描述', 'JSON / CSV 导出'],
+        steps: ['选择需要分析的本地视频文件。', '设置切分方式与目标段长。', '生成连续分镜描述，并复核每段缩略图。', '复制单段或导出完整 JSON / CSV。']
+      },
+      {
+        id: 'video-preclassification',
+        code: '🧑‍🚀',
+        version: '1.0.0',
+        title: '视频智能预分类工作台',
+        shortTitle: '视频预分类',
+        tagline: '批量扫描本地视频样本，用多模态模型先完成类型预筛，再把低置信度样本交给人工复核。',
+        type: 'AI VIDEO CLASSIFIER',
+        accent: '#77b7ff',
+        preview: automationAsset('screens/video-preclassification.png'),
+        what: '一套面向视频评测前置筛选的本地自动化工作台。它可以扫描本地视频目录，接入 Demo、Gemini、OpenAI、Claude、OpenAI 兼容接口或自定义 Webhook，对视频内容进行智能预分类，并输出结构化结果。',
+        problem: '视频评测样本数量一多，人工逐条观看、判断类型和筛选目标样本会非常耗时；不同评测人员的分类标准也容易不一致，后续复核成本会被放大。',
+        result: '用“AI 预分类 + 置信度分流 + 人工复核”的方式，把重复筛选前置自动化，帮助评测人员更快锁定目标样本，并让团队视频评测整体效率提升约 30%。',
+        features: ['本地目录批量扫描', 'Demo / Gemini / OpenAI / Claude / Webhook 接入', '目标样本规则配置', '低置信度自动复核', '人工修正分类', 'CSV 导出'],
+        steps: ['启动本地服务并打开视频智能预分类工作台。', '选择 AI 服务商，配置模型名、API Key、最大抽帧数和人工复核阈值。', '填写分类标签与目标样本规则，点击“选择目录”扫描本地视频文件夹。', '开始自动分类，系统根据视频元数据、关键帧或多模态模型输出一级分类、二级分类、目标判断和置信度。', '复核低置信度、uncertain 或证据不足的样本，必要时手动修改结果。', '确认结果后导出 CSV，用于后续评测、筛选或流程记录。']
       },
       {
         id: 'evaluation-radar',
-        code: '◇',
+        code: '📊',
         version: '1.0.0',
         title: '评测雷达 · Excel 异常检测',
-        shortTitle: 'Excel 异常检测',
+        shortTitle: '评测雷达',
         tagline: '在多轮评测表里，快速发现分数、空值与结构异常。',
         type: 'QUALITY CONTROL',
-        accent: '#d9f5db',
+        accent: '#4e8cff',
+        preview: automationAsset('screens/evaluation-radar.png'),
+        videos: [
+          { label: '评测演示 · 精简素材', path: 'videos/video-description-demo-short.mp4' }
+        ],
         what: '面向多轮评测结果的 Excel 质量检查工具。它会集中检测评分差异、关键空值与表格结构异常，帮助使用者在分析前先确认数据是否可靠。',
         problem: '多轮评测表规模大、字段多，仅靠人工抽查很难同时发现异常分差、遗漏值和结构错位，错误还可能继续传递到后续结论。',
         result: '把质量检查前置，以异常清单替代盲目翻表，让评测数据更快进入可分析状态。',
-        steps: ['导入需要检查的多轮评测 Excel 文件。', '运行检测，扫描评分差异、空值与结构问题。', '根据异常清单回到原表定位并修正数据。']
+        features: ['五分评分法 / GSB 评分法', '多评测 Sheet 对比', '异常阈值配置', '本地浏览器处理'],
+        steps: ['导入需要检查的多轮评测 Excel 文件。', '选择评分方法、评测 Sheet 与检测维度。', '运行检测，扫描评分差异、空值与结构问题。', '根据异常清单回到原表定位并修正数据。']
       }
     ]
   },

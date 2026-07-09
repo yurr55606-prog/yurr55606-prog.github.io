@@ -1,30 +1,33 @@
 import * as THREE from 'three';
-import blackholeCinematicUrl from './assets/blackhole/blackhole-cinematic-v8.png?url';
+import introBlackholeVideoUrl from './assets/intro/blackhole-entry.mov?url';
+import wormholeTransitionVideoUrl from './assets/intro/wormhole-passage.mp4?url';
 import astronautIdleUrl from './assets/character/astronaut-idle.png?url';
 import astronautWaveUrl from './assets/character/astronaut-wave.png?url';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import './styles.css';
 import './pluginStyles.css';
-import { categories, photoAlbums, videoItems } from './data.js';
-import { blackHoleVertex, blackHoleFragment } from './shaders/blackHole.js';
+import { categories, photoAlbums, videoItems, resolveAutomationVideo } from './data.js';
 import { librarySpaceVertex, librarySpaceFragment } from './shaders/librarySpace.js';
-import { cinematicBlurShader } from './shaders/cinematicBlur.js';
 import { astronautVertex, astronautFragment } from './shaders/astronaut.js';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmallScreen = window.matchMedia('(max-width: 720px)').matches;
 const blackholeDprCap = isSmallScreen ? 1.15 : 1.45;
-const spaceDprCap = isSmallScreen ? 0.56 : 0.64;
+const spaceDprCap = isSmallScreen ? 0.72 : 0.88;
 
 const dom = {
   loading: document.querySelector('#loading'),
   loadingProgress: document.querySelector('#loading-progress'),
   blackholeCanvas: document.querySelector('#blackhole-canvas'),
+  introVideoStage: document.querySelector('#intro-video-stage'),
+  introVideo: document.querySelector('#intro-video'),
+  wormholeVideoStage: document.querySelector('#wormhole-video-stage'),
+  wormholeVideo: document.querySelector('#wormhole-video'),
+  warpCanvas: document.querySelector('#warp-canvas'),
   spaceCanvas: document.querySelector('#space-canvas'),
   astronautCanvas: document.querySelector('#astronaut-canvas'),
   intro: document.querySelector('#intro'),
@@ -41,6 +44,11 @@ const dom = {
 
 let state = 'loading';
 let travelStartedAt = 0;
+let travelRaw = 0;
+let travelProgress = 0;
+let wormholePrimed = false;
+let deferredWormholeReset = 0;
+let spaceRenderResumeAt = 0;
 let activeCategory = null;
 let activePhotoAlbum = null;
 let activePlugin = null;
@@ -102,9 +110,102 @@ function stopBlinking() {
   document.body.classList.remove('is-blinking');
 }
 
+function keepIntroVideoPlaying() {
+  const video = dom.introVideo;
+  if (!video || state === 'space') return;
+  if (video.paused || video.ended) {
+    video.play().catch((error) => {
+      document.documentElement.dataset.introVideoPlayError = error?.name || 'PlaybackError';
+    });
+  }
+}
+
+function setupIntroVideo() {
+  const video = dom.introVideo;
+  if (!video) return;
+  video.src = introBlackholeVideoUrl;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.controls = false;
+  video.disablePictureInPicture = true;
+  video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
+  video.setAttribute('disableremoteplayback', '');
+  video.addEventListener('pause', keepIntroVideoPlaying);
+  video.addEventListener('ended', keepIntroVideoPlaying);
+  video.addEventListener('stalled', keepIntroVideoPlaying);
+  video.addEventListener('contextmenu', (event) => event.preventDefault());
+  video.addEventListener('loadeddata', () => {
+    dom.introVideoStage?.classList.add('is-ready');
+    keepIntroVideoPlaying();
+  }, { once: true });
+  keepIntroVideoPlaying();
+}
+
+function setupWormholeVideo() {
+  const video = dom.wormholeVideo;
+  if (!video) return;
+  video.src = wormholeTransitionVideoUrl;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = false;
+  video.autoplay = false;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.controls = false;
+  video.disablePictureInPicture = true;
+  video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
+  video.setAttribute('disableremoteplayback', '');
+  video.addEventListener('contextmenu', (event) => event.preventDefault());
+  video.addEventListener('loadeddata', () => {
+    wormholePrimed = true;
+    // 预热第一帧，避免用户点击进入时才触发高分辨率视频首次解码。
+    const prime = video.play();
+    if (prime) {
+      prime
+        .then(() => {
+          if (state !== 'traveling') {
+            video.pause();
+            if (Number.isFinite(video.duration) && video.currentTime > 0.08) video.currentTime = 0.001;
+          }
+        })
+        .catch(() => {
+          // Safari/内嵌浏览器可能拦截非手势播放；保留 loadeddata 预热结果即可。
+        });
+    }
+  }, { once: true });
+  video.load();
+}
+
+function clearWarpTransition() {
+  document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
+}
+
+function resetWormholeWhenIdle(delay = 5200) {
+  if (deferredWormholeReset) window.clearTimeout(deferredWormholeReset);
+  deferredWormholeReset = window.setTimeout(() => {
+    deferredWormholeReset = 0;
+    const video = dom.wormholeVideo;
+    if (!video || state === 'traveling') return;
+    const reset = () => {
+      if (!video || state === 'traveling') return;
+      try { video.currentTime = 0.001; } catch {}
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(reset, { timeout: 1200 });
+    } else {
+      window.setTimeout(reset, 180);
+    }
+  }, delay);
+}
+
 function startBlink(now, { arrival = false } = {}) {
+  const wasBlinking = document.body.classList.contains('is-blinking');
   document.body.classList.remove('is-blinking');
-  void dom.blinkOverlay.offsetWidth;
+  if (wasBlinking) void dom.blinkOverlay.offsetWidth;
   document.body.classList.add('is-blinking');
   dom.blinkOverlay.dataset.count = String(Number(dom.blinkOverlay.dataset.count || 0) + 1);
   nextBlinkAt = 0;
@@ -154,38 +255,6 @@ function createRenderer(canvas, options = {}) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
   return renderer;
-}
-
-let blackholeRenderer;
-let blackholeScene;
-let blackholeCamera;
-let blackholeUniforms;
-
-async function initBlackHole() {
-  blackholeRenderer = createRenderer(dom.blackholeCanvas, { antialias: false, dprCap: blackholeDprCap });
-  blackholeRenderer.toneMappingExposure = 0.96;
-  blackholeScene = new THREE.Scene();
-  blackholeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const cinematicBase = await new THREE.TextureLoader().loadAsync(blackholeCinematicUrl);
-  cinematicBase.colorSpace = THREE.SRGBColorSpace;
-  cinematicBase.minFilter = THREE.LinearMipmapLinearFilter;
-  cinematicBase.magFilter = THREE.LinearFilter;
-  cinematicBase.anisotropy = 1;
-  blackholeUniforms = {
-    uCinematicBase: { value: cinematicBase },
-    uTime: { value: 0 },
-    uTravel: { value: 0 },
-    uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight).multiplyScalar(blackholeRenderer.getPixelRatio()) },
-    uPointer: { value: new THREE.Vector2() }
-  };
-  const material = new THREE.ShaderMaterial({
-    vertexShader: blackHoleVertex,
-    fragmentShader: blackHoleFragment,
-    uniforms: blackholeUniforms,
-    depthTest: false,
-    depthWrite: false
-  });
-  blackholeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
 }
 
 let spaceRenderer;
@@ -700,7 +769,7 @@ function createRaymarchedLibrary() {
       value: new THREE.Vector2(window.innerWidth, window.innerHeight).multiplyScalar(spaceRenderer.getPixelRatio())
     },
     uPointer: { value: new THREE.Vector2() },
-    uMaxSteps: { value: window.innerWidth < 720 ? 44 : 56 },
+    uMaxSteps: { value: window.innerWidth < 720 ? 38 : 48 },
     uDepth: { value: 0 }
   };
   const material = new THREE.ShaderMaterial({
@@ -1213,28 +1282,23 @@ async function initSpace() {
   spaceComposer.addPass(new RenderPass(spaceScene, spaceCamera));
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    isSmallScreen ? 0.2 : 0.26,
-    0.62,
-    0.62
+    isSmallScreen ? 0.14 : 0.18,
+    0.52,
+    0.68
   );
   spaceComposer.addPass(bloom);
-  cinematicBlurPass = new ShaderPass(cinematicBlurShader);
-  cinematicBlurPass.uniforms.uTexelSize.value = new THREE.Vector2(
-    1 / (window.innerWidth * spaceRenderer.getPixelRatio()),
-    1 / (window.innerHeight * spaceRenderer.getPixelRatio())
-  );
-  cinematicBlurPass.uniforms.uDirection.value = new THREE.Vector2(1, -0.16);
-  blurBaseStrength = reducedMotion ? 0 : (isSmallScreen ? 0.18 : 0.28);
-  cinematicBlurPass.uniforms.uStrength.value = blurBaseStrength;
-  spaceComposer.addPass(cinematicBlurPass);
+  cinematicBlurPass = null;
+  blurBaseStrength = 0;
   spaceComposer.addPass(new OutputPass());
+  spaceRenderer.compile(spaceScene, spaceCamera);
+  updateSpace(0, 1 / 60);
 }
 
 function updateSpace(time, delta) {
   smoothPointer.lerp(pointer, reducedMotion ? 0.02 : 0.055);
   const depth = state === 'space' && !activeCategory ? scrollDepth : 0;
   const entryAlignment = state === 'traveling'
-    ? smoothstep(0.68, 1, blackholeUniforms?.uTravel.value ?? 0)
+    ? smoothstep(0.68, 1, travelProgress)
     : 1;
 
   if (cinematicBlurPass) {
@@ -1311,64 +1375,118 @@ function updateSpace(time, delta) {
     material.uniforms.uHover.value = damp(material.uniforms.uHover.value, portal.userData.hovered ? 1 : 0, 5, delta);
   });
 
-  updateAstronaut(time, delta);
-
   spaceComposer.render(delta);
-  // 人物使用独立高清透明画布，避免五维空间的低分辨率与运动模糊抹掉脸部细节。
-  if (astronautScene && astronautMaterial.uniforms.uReveal.value > 0.002) {
-    astronautRenderer.render(astronautScene, spaceCamera);
-  } else if (astronautRenderer) {
-    astronautRenderer.clear();
+
+  if (state === 'space') {
+    updateAstronaut(time, delta);
+    // 人物使用独立高清透明画布，避免五维空间的低分辨率与运动模糊抹掉脸部细节。
+    if (astronautScene && astronautMaterial.uniforms.uReveal.value > 0.002) {
+      astronautRenderer.render(astronautScene, spaceCamera);
+    } else if (astronautRenderer) {
+      astronautRenderer.clear();
+    }
   }
 }
 
 function beginTravel() {
   if (state !== 'intro') return;
+  if (deferredWormholeReset) {
+    window.clearTimeout(deferredWormholeReset);
+    deferredWormholeReset = 0;
+  }
   state = 'traveling';
+  spaceRenderResumeAt = Number.POSITIVE_INFINITY;
   astronautVisible = false;
   arrivalBlinkActive = false;
   nextAstronautWaveAt = 0;
   astronautWaveStartedAt = -1;
+  travelProgress = 0;
+  travelRaw = 0;
   document.body.classList.remove('has-arrived-character', 'is-blinking');
   window.__arrivalTimeline = [];
   setArrivalPhase('traveling-character-hidden');
+  document.documentElement.dataset.travelRaw = '0';
+  document.documentElement.dataset.travelProgress = '0';
   if (astronautMaterial) astronautMaterial.uniforms.uReveal.value = 0;
   travelStartedAt = performance.now();
   document.body.classList.add('is-traveling');
-  dom.spaceCanvas.style.clipPath = `circle(0% at ${window.innerWidth < 720 ? 50 : 54}% 50%)`;
+  document.documentElement.style.setProperty('--travel-progress', '0');
+  document.documentElement.style.setProperty('--wormhole-opacity', '0');
+  document.documentElement.style.setProperty('--space-entry-opacity', '0');
+  document.documentElement.style.setProperty('--warp-intensity', '0');
+  document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
+  clearWarpTransition();
+  [dom.wormholeVideo].filter(Boolean).forEach((video) => {
+    if (!wormholePrimed || video.ended || video.currentTime > 0.25) {
+      try { video.currentTime = 0.001; } catch {}
+    }
+    video.play().catch((error) => {
+      document.documentElement.dataset.wormholeVideoPlayError = error?.name || 'PlaybackError';
+    });
+  });
+  dom.spaceCanvas.style.clipPath = '';
   dom.enter.disabled = true;
+  keepIntroVideoPlaying();
 }
 
 function finishTravel() {
+  const now = performance.now();
   state = 'space';
+  spaceRenderResumeAt = now + (reducedMotion ? 0 : 2800);
+  document.documentElement.dataset.travelRaw = '1';
+  document.documentElement.dataset.travelProgress = '1';
+  travelRaw = 1;
   document.body.classList.remove('is-traveling');
   document.body.classList.add('is-in-space');
+  document.documentElement.style.setProperty('--travel-progress', '1');
+  document.documentElement.style.setProperty('--wormhole-opacity', '0');
+  document.documentElement.style.setProperty('--space-entry-opacity', '1');
+  document.documentElement.style.setProperty('--warp-intensity', '0');
+  document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
+  dom.introVideo.pause();
+  if (dom.wormholeVideo) {
+    dom.wormholeVideo.pause();
+    resetWormholeWhenIdle();
+  }
   dom.blackholeCanvas.style.opacity = '';
+  dom.introVideoStage.style.opacity = '';
+  dom.wormholeVideoStage.style.opacity = '';
+  clearWarpTransition();
   dom.spaceCanvas.style.opacity = '';
   dom.spaceCanvas.style.clipPath = '';
   dom.spaceUi.setAttribute('aria-hidden', 'false');
   setArrivalPhase('space-complete');
-  // 先完整绘制一帧五维空间，再立刻闭眼；人物只会在重新睁眼之后显现。
-  requestAnimationFrame(() => {
+  // 先让五维空间稳定接管，再触发眨眼；避免在转场结束帧强制重启动画造成卡顿。
+  window.setTimeout(() => requestAnimationFrame(() => {
     if (state !== 'space' || activeCategory || astronautVisible) return;
     startBlink(performance.now(), { arrival: true });
-  });
+  }), reducedMotion ? 0 : 1200);
 }
 
 function updateTravel(now) {
-  const duration = reducedMotion ? 1500 : 4800;
+  const duration = reducedMotion ? 1500 : 4120;
   const raw = clamp((now - travelStartedAt) / duration, 0, 1);
   const progress = easeInOutCubic(raw);
-  blackholeUniforms.uTravel.value = progress;
+  travelRaw = raw;
+  travelProgress = progress;
+  document.documentElement.dataset.travelRaw = raw.toFixed(4);
+  document.documentElement.dataset.travelProgress = progress.toFixed(4);
+  document.documentElement.style.setProperty('--travel-progress', raw.toFixed(4));
 
-  // 先完整进入同一事件视界，再显露五维空间，避免两个场景过早叠成杂乱画面。
-  const spaceFade = smoothstep(0.76, 0.985, raw);
-  const blackFade = 1 - smoothstep(0.82, 0.995, raw);
+  // 0-1 秒：沿首页黑洞视频推进；1-3 秒：高清虫洞视频接管；最后淡入五维空间。
+  const wormholeFadeIn = smoothstep(0.1, 0.26, raw);
+  const wormholeFadeOut = 1 - smoothstep(0.8, 0.97, raw);
+  const wormholeOpacity = wormholeFadeIn * wormholeFadeOut;
+  const spaceFade = smoothstep(0.78, 0.97, raw);
+  const blackFade = 1 - smoothstep(0.16, 0.42, raw);
+  document.documentElement.style.setProperty('--wormhole-opacity', wormholeOpacity.toFixed(4));
+  document.documentElement.style.setProperty('--space-entry-opacity', spaceFade.toFixed(4));
+  document.documentElement.style.setProperty('--warp-intensity', (wormholeOpacity * smoothstep(0.12, 0.72, raw)).toFixed(4));
+  document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
   dom.spaceCanvas.style.opacity = String(spaceFade);
   dom.blackholeCanvas.style.opacity = String(blackFade);
-  const revealRadius = smoothstep(0.74, 0.995, raw) * 148;
-  const revealOriginX = window.innerWidth < 720 ? 50 : 54;
-  dom.spaceCanvas.style.clipPath = `circle(${revealRadius}% at ${revealOriginX}% 50%)`;
+  dom.introVideoStage.style.opacity = String(blackFade);
+  dom.wormholeVideoStage.style.opacity = String(wormholeOpacity);
 
   if (raw >= 1) finishTravel();
 }
@@ -1398,7 +1516,7 @@ function openCategory(key) {
   } else if (key === 'video') {
     renderVideoGallery();
   } else {
-    dom.closePanel.innerHTML = '<span>×</span> 返回时空中心';
+    dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
     dom.workList.replaceChildren(...category.works.map((work) => {
       const article = document.createElement('article');
       article.className = 'work-card';
@@ -1427,13 +1545,27 @@ function openCategory(key) {
 }
 
 function renderPluginGrid() {
-  const plugins = categories.plugin.works;
-  dom.closePanel.innerHTML = '<span>×</span> 返回时空中心';
+  const pluginOrder = [
+    'evaluation-radar',
+    'video-description',
+    'vision-annotation',
+    'video-preclassification',
+    'video-batch-download',
+    'video-timestamp',
+    'blobstore-key'
+  ];
+  const orderIndex = new Map(pluginOrder.map((id, index) => [id, index]));
+  const plugins = [...categories.plugin.works].sort((left, right) => {
+    const leftIndex = orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+  dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
   dom.workList.className = 'work-list plugin-work-list';
 
   const grid = document.createElement('section');
   grid.className = 'plugin-grid';
-  grid.setAttribute('aria-label', '插件作品列表');
+  grid.setAttribute('aria-label', '自动化工具列表');
 
   plugins.forEach((plugin, index) => {
     const card = document.createElement('button');
@@ -1466,19 +1598,31 @@ function renderPluginGrid() {
     foot.innerHTML = '<small>展开工作流</small><i aria-hidden="true"></i>';
     card.append(top, copy, foot);
 
+    let tiltFrame = 0;
     card.addEventListener('pointermove', (event) => {
-      const rect = card.getBoundingClientRect();
-      const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
-      card.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
-      card.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
-      card.style.setProperty('--rx', `${((0.5 - y) * 3.2).toFixed(2)}deg`);
-      card.style.setProperty('--ry', `${((x - 0.5) * 4.2).toFixed(2)}deg`);
+      if (tiltFrame) return;
+      tiltFrame = requestAnimationFrame(() => {
+        tiltFrame = 0;
+        const rect = card.getBoundingClientRect();
+        const x = clamp((event.clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+        const y = clamp((event.clientY - rect.top) / Math.max(rect.height, 1), 0, 1);
+        card.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
+        card.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
+        card.style.setProperty('--rx', `${((0.5 - y) * 2.4).toFixed(2)}deg`);
+        card.style.setProperty('--ry', `${((x - 0.5) * 3.4).toFixed(2)}deg`);
+      });
     });
     card.addEventListener('pointerleave', () => {
+      if (tiltFrame) {
+        cancelAnimationFrame(tiltFrame);
+        tiltFrame = 0;
+      }
+      card.style.setProperty('--mx', '50%');
+      card.style.setProperty('--my', '50%');
       card.style.setProperty('--rx', '0deg');
       card.style.setProperty('--ry', '0deg');
     });
+
     card.addEventListener('click', () => openPluginDetail(plugin.id));
     grid.append(card);
   });
@@ -1491,7 +1635,7 @@ function openPluginDetail(pluginId) {
   if (!plugin || activeCategory !== 'plugin') return;
   activePlugin = pluginId;
   document.body.classList.add('has-plugin-detail');
-  dom.closePanel.innerHTML = '<span>‹</span> 返回插件作品';
+  dom.closePanel.innerHTML = '<span>‹</span> 返回自动化';
   dom.panelTitle.textContent = plugin.shortTitle;
   dom.panelDescription.textContent = plugin.tagline;
   dom.workList.className = 'work-list plugin-detail-view';
@@ -1512,15 +1656,43 @@ function openPluginDetail(pluginId) {
   const content = document.createElement('div');
   content.className = 'plugin-detail-content';
 
+  const visual = document.createElement('figure');
+  visual.className = 'plugin-detail-visual';
+  if (plugin.preview) {
+    const image = document.createElement('img');
+    image.src = plugin.preview;
+    image.alt = `${plugin.title}界面截图`;
+    image.loading = 'eager';
+    image.decoding = 'async';
+    visual.append(image);
+  }
+  const caption = document.createElement('figcaption');
+  caption.textContent = '界面截图 / Chrome 扩展与本地工作台';
+  visual.append(caption);
+
   const introduction = document.createElement('section');
   introduction.innerHTML = `<small>01 / PRODUCT</small><h4>它是什么</h4><p>${plugin.what}</p>`;
 
   const problem = document.createElement('section');
   problem.innerHTML = `<small>02 / PROBLEM</small><h4>解决什么问题</h4><p>${plugin.problem}</p><blockquote>${plugin.result}</blockquote>`;
 
+  const featureSection = document.createElement('section');
+  const featureLabel = document.createElement('small');
+  featureLabel.textContent = '03 / MODULES';
+  const featureTitle = document.createElement('h4');
+  featureTitle.textContent = '核心能力';
+  const featureList = document.createElement('div');
+  featureList.className = 'plugin-feature-list';
+  (plugin.features || []).forEach((feature) => {
+    const item = document.createElement('span');
+    item.textContent = feature;
+    featureList.append(item);
+  });
+  featureSection.append(featureLabel, featureTitle, featureList);
+
   const usage = document.createElement('section');
   const usageLabel = document.createElement('small');
-  usageLabel.textContent = '03 / WORKFLOW';
+  usageLabel.textContent = '04 / WORKFLOW';
   const usageTitle = document.createElement('h4');
   usageTitle.textContent = '如何使用';
   const steps = document.createElement('ol');
@@ -1530,7 +1702,62 @@ function openPluginDetail(pluginId) {
     steps.append(item);
   });
   usage.append(usageLabel, usageTitle, steps);
-  content.append(introduction, problem, usage);
+
+  content.append(visual, introduction, problem, featureSection, usage);
+
+  if (plugin.videos?.length) {
+    const videoSection = document.createElement('section');
+    videoSection.className = 'plugin-video-section';
+    const videoLabel = document.createElement('small');
+    videoLabel.textContent = '05 / DEMO';
+    const videoTitle = document.createElement('h4');
+    videoTitle.textContent = '演示视频';
+    const videoGrid = document.createElement('div');
+    videoGrid.className = 'plugin-video-grid';
+    plugin.videos.forEach((item) => {
+      const frame = document.createElement('article');
+      frame.className = 'plugin-video-card';
+      const video = document.createElement('video');
+      video.controls = true;
+      video.preload = 'none';
+      video.playsInline = true;
+      video.muted = true;
+      video.setAttribute('controlsList', 'nodownload');
+      video.dataset.videoPath = item.path;
+      video.setAttribute('aria-label', item.label);
+      const loader = document.createElement('button');
+      loader.className = 'plugin-video-load';
+      loader.type = 'button';
+      loader.innerHTML = '<span>加载演示</span><small>按需加载视频</small>';
+      loader.addEventListener('click', async () => {
+        if (frame.classList.contains('is-loading')) return;
+        frame.classList.add('is-loading');
+        loader.disabled = true;
+        loader.innerHTML = '<span>加载中…</span><small>正在读取演示视频</small>';
+        try {
+          const url = await resolveAutomationVideo(item.path);
+          video.src = url;
+          video.load();
+          frame.classList.add('is-ready');
+          await video.play().catch(() => {});
+        } catch (error) {
+          frame.classList.add('has-error');
+          loader.innerHTML = '<span>加载失败</span><small>请稍后重试</small>';
+          loader.disabled = false;
+          console.error('演示视频加载失败：', error);
+        } finally {
+          frame.classList.remove('is-loading');
+        }
+      });
+      const label = document.createElement('p');
+      label.textContent = item.label;
+      frame.append(video, loader, label);
+      videoGrid.append(frame);
+    });
+    videoSection.append(videoLabel, videoTitle, videoGrid);
+    content.append(videoSection);
+  }
+
   detail.append(identity, content);
   dom.workList.replaceChildren(detail);
   dom.panel.scrollTo({ top: 0, behavior: 'auto' });
@@ -1547,7 +1774,7 @@ function closePluginDetail() {
 }
 
 function renderPhotoFolders() {
-  dom.closePanel.innerHTML = '<span>×</span> 返回时空中心';
+  dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
   const grid = document.createElement('section');
   grid.className = 'photo-folder-grid';
   grid.setAttribute('aria-label', '摄影作品相册');
@@ -1706,7 +1933,7 @@ function closePhotoAlbum() {
   document.body.classList.remove('has-photo-album');
   dom.panelTitle.textContent = categories.photo.title;
   dom.panelDescription.textContent = categories.photo.description;
-  dom.closePanel.innerHTML = '<span>×</span> 返回时空中心';
+  dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
   renderPhotoFolders();
   return true;
 }
@@ -1714,7 +1941,7 @@ function closePhotoAlbum() {
 function renderVideoGallery() {
   activeVideoGallery = true;
   document.body.classList.add('has-photo-album', 'has-video-gallery');
-  dom.closePanel.innerHTML = '<span>×</span> 返回时空中心';
+  dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
 
   const gallery = document.createElement('section');
   gallery.className = 'fold-gallery video-fold-gallery';
@@ -1918,19 +2145,15 @@ function onWheel(event) {
 function onResize() {
   const width = window.innerWidth;
   const height = window.innerHeight;
-  const blackholeDpr = Math.min(window.devicePixelRatio, blackholeDprCap);
   const spaceDpr = Math.min(window.devicePixelRatio, spaceDprCap);
-  blackholeRenderer?.setPixelRatio(blackholeDpr);
-  blackholeRenderer?.setSize(width, height, false);
-  blackholeUniforms?.uResolution.value.set(width * blackholeDpr, height * blackholeDpr);
   spaceRenderer?.setPixelRatio(spaceDpr);
   spaceRenderer?.setSize(width, height, false);
   astronautRenderer?.setPixelRatio(Math.min(window.devicePixelRatio, width < 720 ? 1 : 1.4));
   astronautRenderer?.setSize(width, height, false);
   libraryUniforms?.uResolution.value.set(width * spaceDpr, height * spaceDpr);
-  if (libraryUniforms?.uMaxSteps) libraryUniforms.uMaxSteps.value = width < 720 ? 44 : 56;
+  if (libraryUniforms?.uMaxSteps) libraryUniforms.uMaxSteps.value = width < 720 ? 38 : 48;
   cinematicBlurPass?.uniforms.uTexelSize.value.set(1 / (width * spaceDpr), 1 / (height * spaceDpr));
-  blurBaseStrength = reducedMotion ? 0 : (width < 720 ? 0.18 : 0.28);
+  blurBaseStrength = 0;
   spaceComposer?.setPixelRatio(spaceDpr);
   spaceComposer?.setSize(width, height);
   if (spaceCamera) {
@@ -1946,15 +2169,10 @@ function animate(now) {
   const time = clock.elapsedTime;
   smoothPointer.lerp(pointer, 0.04);
 
-  if (blackholeUniforms && state !== 'space') {
-    blackholeUniforms.uTime.value = time;
-    blackholeUniforms.uPointer.value.copy(smoothPointer);
-    blackholeRenderer.render(blackholeScene, blackholeCamera);
-  }
   if (state === 'traveling') updateTravel(now);
+  else if (state === 'intro') clearWarpTransition();
   updateBlink(now);
-  const shouldRenderSpace = state === 'space'
-    || (state === 'traveling' && (blackholeUniforms?.uTravel.value ?? 0) > 0.45);
+  const shouldRenderSpace = state === 'space' && now >= spaceRenderResumeAt;
   if (spaceRenderer && shouldRenderSpace) updateSpace(time, delta);
   requestAnimationFrame(animate);
 }
@@ -1968,11 +2186,20 @@ function bindEvents() {
   dom.closePanel.addEventListener('click', closeCategory);
   document.querySelectorAll('[data-category]').forEach((button) => {
     button.addEventListener('click', () => openCategory(button.dataset.category));
+    button.addEventListener('pointermove', (event) => {
+      const rect = button.getBoundingClientRect();
+      const x = clamp((event.clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+      const y = clamp((event.clientY - rect.top) / Math.max(rect.height, 1), 0, 1);
+      button.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
+      button.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
+    });
     button.addEventListener('pointerenter', () => {
       const portal = portals.find((item) => item.userData.category === button.dataset.category);
       if (portal) portal.userData.hovered = true;
     });
     button.addEventListener('pointerleave', () => {
+      button.style.removeProperty('--mx');
+      button.style.removeProperty('--my');
       const portal = portals.find((item) => item.userData.category === button.dataset.category);
       if (portal) portal.userData.hovered = false;
     });
@@ -2003,11 +2230,13 @@ async function init() {
   try {
     let progress = 8;
     dom.loadingProgress.textContent = progress;
-    await initBlackHole();
+    setupIntroVideo();
+    setupWormholeVideo();
     progress = 46;
     dom.loadingProgress.textContent = progress;
     await new Promise((resolve) => requestAnimationFrame(resolve));
     await initSpace();
+    updateSpace(clock.elapsedTime, 0.016);
     progress = 88;
     dom.loadingProgress.textContent = progress;
     bindEvents();

@@ -18,7 +18,14 @@
 
       <canvas id="space-canvas" aria-label="动态五维作品空间"></canvas>
       <canvas id="astronaut-canvas" aria-hidden="true"></canvas>
-      <canvas id="blackhole-canvas" aria-label="动态黑洞"></canvas>
+      <canvas id="blackhole-canvas" aria-hidden="true"></canvas>
+      <div id="intro-video-stage" aria-hidden="true">
+        <video id="intro-video" muted loop playsinline autoplay preload="auto"></video>
+      </div>
+      <div id="wormhole-video-stage" aria-hidden="true">
+        <video id="wormhole-video" muted playsinline preload="auto"></video>
+      </div>
+      <canvas id="warp-canvas" aria-hidden="true"></canvas>
       <div class="grain" aria-hidden="true"></div>
       <div id="blink-overlay" aria-hidden="true"></div>
 
@@ -43,13 +50,13 @@
 
         <nav class="portal-nav" aria-label="作品分类">
           <button data-category="plugin" type="button">
-            <strong>插件</strong>
+            <strong>自动化</strong>
           </button>
           <button data-category="photo" type="button">
             <strong>摄影</strong>
           </button>
           <button data-category="video" type="button">
-            <strong>影像</strong>
+            <strong>摄像</strong>
           </button>
         </nav>
       </main>
@@ -59,7 +66,7 @@
           <span>×</span> 返回时空中心
         </button>
         <div class="panel-heading">
-          <h2 id="panel-title">插件</h2>
+          <h2 id="panel-title">自动化</h2>
           <p id="panel-description"></p>
         </div>
         <div id="work-list" class="work-list"></div>
