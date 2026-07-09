@@ -70,6 +70,8 @@ const clock = new THREE.Clock();
 let performanceWindowStartedAt = performance.now();
 let performanceFrameCount = 0;
 let introVideoRetryTimer = 0;
+let wormholeLoadStarted = false;
+let wormholeBoosted = false;
 
 function recordFrameRate(now) {
   performanceFrameCount += 1;
@@ -197,7 +199,7 @@ function setupWormholeVideo() {
   video.loop = false;
   video.autoplay = false;
   video.playsInline = true;
-  video.preload = 'auto';
+  video.preload = isSmallScreen ? 'metadata' : 'auto';
   video.controls = false;
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
@@ -205,6 +207,7 @@ function setupWormholeVideo() {
   video.addEventListener('contextmenu', (event) => event.preventDefault());
   video.addEventListener('loadeddata', () => {
     wormholePrimed = true;
+    if (isSmallScreen) return;
     // 预热第一帧，避免用户点击进入时才触发高分辨率视频首次解码。
     const prime = video.play();
     if (prime) {
@@ -221,6 +224,31 @@ function setupWormholeVideo() {
     }
   }, { once: true });
   video.load();
+  wormholeLoadStarted = true;
+}
+
+function boostWormholeVideoLoading() {
+  const video = dom.wormholeVideo;
+  if (!video || wormholeBoosted) return;
+  wormholeBoosted = true;
+  video.preload = 'auto';
+  if (!wormholeLoadStarted) {
+    video.src = wormholeTransitionVideoUrl;
+    wormholeLoadStarted = true;
+  }
+  if (video.readyState < 2) video.load();
+}
+
+function scheduleWormholeWarmup() {
+  const warmup = () => {
+    if (state !== 'intro') return;
+    boostWormholeVideoLoading();
+  };
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(warmup, { timeout: isSmallScreen ? 2600 : 900 });
+  } else {
+    window.setTimeout(warmup, isSmallScreen ? 1800 : 500);
+  }
 }
 
 function clearWarpTransition() {
@@ -1459,6 +1487,7 @@ function beginTravel() {
   document.documentElement.style.setProperty('--warp-intensity', '0');
   document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
   clearWarpTransition();
+  boostWormholeVideoLoading();
   [dom.wormholeVideo].filter(Boolean).forEach((video) => {
     if (!wormholePrimed || video.ended || video.currentTime > 0.25) {
       try { video.currentTime = 0.001; } catch {}
@@ -2224,8 +2253,14 @@ function bindEvents() {
   window.addEventListener('pointermove', onPointerMove, { passive: true });
   window.addEventListener('resize', onResize);
   window.addEventListener('wheel', onWheel, { passive: true });
-  window.addEventListener('touchstart', wakeIntroVideo, { passive: true });
-  window.addEventListener('pointerdown', wakeIntroVideo, { passive: true });
+  window.addEventListener('touchstart', () => {
+    wakeIntroVideo();
+    if (state === 'intro') boostWormholeVideoLoading();
+  }, { passive: true });
+  window.addEventListener('pointerdown', () => {
+    wakeIntroVideo();
+    if (state === 'intro') boostWormholeVideoLoading();
+  }, { passive: true });
   dom.intro.addEventListener('click', beginTravel);
   dom.spaceCanvas.addEventListener('click', updatePortalHover);
   dom.closePanel.addEventListener('click', closeCategory);
@@ -2280,6 +2315,7 @@ async function init() {
     dom.loadingProgress.textContent = progress;
     setupIntroVideo();
     setupWormholeVideo();
+    scheduleWormholeWarmup();
     progress = 46;
     dom.loadingProgress.textContent = progress;
     await new Promise((resolve) => requestAnimationFrame(resolve));
