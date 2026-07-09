@@ -4,3 +4,5 @@ tmp/
 .vercel/
 .DS_Store
 *.local
+.vercel
+.env*
