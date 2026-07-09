@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#020202" />
+    <meta name="description" content="穿越黑洞，进入由插件、摄影与影像构成的个人作品宇宙。" />
+    <meta name="robots" content="index,follow,noimageindex" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>我的作品宇宙</title>
+    <script type="module" crossorigin src="/assets/iPFY20L4.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/YKaCONdt.css">
+  </head>
+  <body>
+    <div id="app">
+      <div id="loading" aria-live="polite">
+        <span></span>
+        <p><b id="loading-progress">0</b>%</p>
+      </div>
+
+      <canvas id="space-canvas" aria-label="动态五维作品空间"></canvas>
+      <canvas id="astronaut-canvas" aria-hidden="true"></canvas>
+      <canvas id="blackhole-canvas" aria-hidden="true"></canvas>
+      <div id="intro-video-stage" aria-hidden="true">
+        <video id="intro-video" muted loop playsinline autoplay preload="auto"></video>
+      </div>
+      <div id="wormhole-video-stage" aria-hidden="true">
+        <video id="wormhole-video" muted playsinline preload="auto"></video>
+      </div>
+      <canvas id="warp-canvas" aria-hidden="true"></canvas>
+      <div class="grain" aria-hidden="true"></div>
+      <div id="blink-overlay" aria-hidden="true"></div>
+
+      <section id="intro" aria-label="黑洞入口">
+        <div class="intro-title">
+          <h1>我的宇宙</h1>
+        </div>
+        <button id="enter" type="button">
+          <span>进入</span>
+          <i aria-hidden="true"></i>
+        </button>
+      </section>
+
+      <div id="travel-copy" aria-live="polite">
+        <strong>时间正在折叠</strong>
+      </div>
+
+      <main id="space-ui" aria-label="作品空间">
+        <header class="space-header">
+          <h2>作品</h2>
+        </header>
+
+        <nav class="portal-nav" aria-label="作品分类">
+          <button data-category="plugin" type="button">
+            <strong>自动化</strong>
+          </button>
+          <button data-category="photo" type="button">
+            <strong>摄影</strong>
+          </button>
+          <button data-category="video" type="button">
+            <strong>摄像</strong>
+          </button>
+        </nav>
+      </main>
+
+      <aside id="work-panel" aria-hidden="true" aria-label="作品详情">
+        <button id="close-panel" type="button" aria-label="返回时空中心">
+          <span>×</span> 返回时空中心
+        </button>
+        <div class="panel-heading">
+          <h2 id="panel-title">自动化</h2>
+          <p id="panel-description"></p>
+        </div>
+        <div id="work-list" class="work-list"></div>
+      </aside>
+
+      <div id="webgl-fallback" hidden>
+        <h1>我的作品宇宙</h1>
+        <p>当前浏览器无法开启 WebGL。请使用最新版 Chrome、Safari 或 Edge 访问。</p>
+      </div>
+    </div>
+  </body>
+</html>
