@@ -69,6 +69,7 @@ const smoothPointer = new THREE.Vector2();
 const clock = new THREE.Clock();
 let performanceWindowStartedAt = performance.now();
 let performanceFrameCount = 0;
+let introVideoRetryTimer = 0;
 
 function recordFrameRate(now) {
   performanceFrameCount += 1;
@@ -121,6 +122,20 @@ function keepIntroVideoPlaying() {
   }
 }
 
+function wakeIntroVideo() {
+  if (state === 'space') return;
+  const video = dom.introVideo;
+  if (!video) return;
+  video.muted = true;
+  video.defaultMuted = true;
+  const promise = video.play();
+  if (promise) {
+    promise.catch((error) => {
+      document.documentElement.dataset.introVideoPlayError = error?.name || 'PlaybackError';
+    });
+  }
+}
+
 function setupIntroVideo() {
   const video = dom.introVideo;
   if (!video) return;
@@ -158,8 +173,19 @@ function setupIntroVideo() {
     video.classList.remove('is-ready');
     document.documentElement.dataset.introVideoLoadError = video.error?.code ? String(video.error.code) : 'MediaError';
   });
+  video.addEventListener('waiting', () => {
+    document.documentElement.dataset.introVideoWaiting = String(Date.now());
+  });
   video.load();
-  keepIntroVideoPlaying();
+  wakeIntroVideo();
+  introVideoRetryTimer = window.setInterval(() => {
+    if (state === 'space') {
+      window.clearInterval(introVideoRetryTimer);
+      introVideoRetryTimer = 0;
+      return;
+    }
+    if (!video.classList.contains('is-ready') || video.paused) wakeIntroVideo();
+  }, 1800);
 }
 
 function setupWormholeVideo() {
@@ -2198,6 +2224,8 @@ function bindEvents() {
   window.addEventListener('pointermove', onPointerMove, { passive: true });
   window.addEventListener('resize', onResize);
   window.addEventListener('wheel', onWheel, { passive: true });
+  window.addEventListener('touchstart', wakeIntroVideo, { passive: true });
+  window.addEventListener('pointerdown', wakeIntroVideo, { passive: true });
   dom.intro.addEventListener('click', beginTravel);
   dom.spaceCanvas.addEventListener('click', updatePortalHover);
   dom.closePanel.addEventListener('click', closeCategory);
@@ -2239,7 +2267,10 @@ function bindEvents() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !arrivalBlinkActive) stopBlinking();
-    else scheduleBlink();
+    else {
+      scheduleBlink();
+      wakeIntroVideo();
+    }
   });
 }
 

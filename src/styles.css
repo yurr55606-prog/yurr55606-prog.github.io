@@ -53,6 +53,7 @@ canvas {
   will-change: opacity;
   contain: paint;
   isolation: isolate;
+  animation: intro-poster-drift 18s ease-in-out infinite alternate;
 }
 
 #intro-video-stage::before,
@@ -65,20 +66,65 @@ canvas {
 
 #intro-video-stage::before {
   z-index: 2;
+  inset: -18%;
+  opacity: .74;
   background:
+    repeating-conic-gradient(from 18deg at 61% 52%,
+      rgba(255, 177, 102, 0) 0deg,
+      rgba(255, 177, 102, .09) 5deg,
+      rgba(255, 222, 180, .18) 8deg,
+      rgba(255, 94, 155, .08) 11deg,
+      rgba(255, 177, 102, 0) 17deg,
+      rgba(255, 177, 102, 0) 28deg),
+    radial-gradient(ellipse 72% 16% at 54% 55%, rgba(255, 221, 176, .28), rgba(255, 135, 84, .14) 34%, rgba(255, 91, 160, .08) 52%, transparent 72%),
+    radial-gradient(ellipse 42% 56% at 67% 49%, transparent 29%, rgba(255, 229, 183, .18) 31%, rgba(255, 136, 77, .12) 41%, transparent 57%),
     radial-gradient(circle at 50% 50%, transparent 29%, rgba(0, 0, 0, .06) 50%, rgba(0, 0, 0, .46) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .22), transparent 24%, transparent 70%, rgba(0, 0, 0, .42));
+  background-size: 120% 120%, 145% 145%, 128% 128%, 100% 100%, 100% 100%;
+  background-position: 50% 50%, 46% 54%, 61% 50%, 50% 50%, 50% 50%;
+  mix-blend-mode: screen;
+  filter: blur(.2px) saturate(1.12);
+  transform-origin: 61% 52%;
+  animation: intro-accretion-flow 7.8s linear infinite;
+  will-change: transform, background-position, opacity;
 }
 
 #intro-video-stage::after {
   z-index: 3;
-  opacity: .44;
+  opacity: .62;
   background:
+    radial-gradient(circle at 7% 61%, rgba(255, 156, 96, .22) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 34%, rgba(255, 221, 182, .22) 0 1px, transparent 2px),
+    radial-gradient(circle at 29% 74%, rgba(255, 101, 170, .18) 0 1px, transparent 2px),
+    radial-gradient(circle at 79% 28%, rgba(255, 220, 176, .2) 0 1px, transparent 2px),
+    linear-gradient(102deg, transparent 0 18%, rgba(255, 129, 82, .18) 37%, rgba(255, 230, 194, .28) 50%, rgba(255, 92, 168, .13) 63%, transparent 82% 100%),
     linear-gradient(90deg, rgba(255,255,255,.045), transparent 18%, transparent 82%, rgba(255,255,255,.045)),
     radial-gradient(circle at 63% 52%, rgba(255, 215, 150, .13), transparent 34%),
     radial-gradient(circle at 45% 70%, rgba(255, 114, 77, .075), transparent 36%),
     radial-gradient(circle at 25% 28%, rgba(120, 198, 255, .07), transparent 42%);
+  background-size:
+    220px 140px,
+    260px 180px,
+    300px 220px,
+    240px 170px,
+    180% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-position:
+    0 0,
+    60px 20px,
+    -20px 70px,
+    80px -30px,
+    -120% 50%,
+    50% 50%,
+    50% 50%,
+    50% 50%,
+    50% 50%;
   mix-blend-mode: screen;
+  animation: intro-photon-stream 6.2s linear infinite;
+  will-change: background-position, opacity;
 }
 
 #intro-video {
@@ -110,6 +156,14 @@ canvas {
 
 #intro-video-stage.has-video-error #intro-video {
   opacity: 0;
+}
+
+#intro-video-stage.is-ready::before {
+  opacity: .34;
+}
+
+#intro-video-stage.is-ready::after {
+  opacity: .36;
 }
 
 #wormhole-video-stage {
@@ -226,6 +280,53 @@ body.is-blinking #blink-overlay { animation: blink-screen .24s cubic-bezier(.76,
   33% { transform: translate3d(2%, -1%, 0); }
   66% { transform: translate3d(-1%, -2%, 0); }
   100% { transform: translate3d(1%, 2%, 0); }
+}
+
+@keyframes intro-poster-drift {
+  0% { background-position: 50% 50%, 61% 52%, 60% center, 50% 50%, 50% 50%; }
+  100% { background-position: 50% 50%, 63% 50%, 62% center, 50% 50%, 50% 50%; }
+}
+
+@keyframes intro-accretion-flow {
+  0% {
+    transform: scale(1.012) rotate(0deg);
+    background-position: 48% 50%, 42% 54%, 60% 50%, 50% 50%, 50% 50%;
+  }
+  50% {
+    transform: scale(1.036) rotate(2.4deg);
+    background-position: 58% 52%, 54% 52%, 64% 52%, 50% 50%, 50% 50%;
+  }
+  100% {
+    transform: scale(1.012) rotate(4.8deg);
+    background-position: 68% 50%, 66% 54%, 60% 50%, 50% 50%, 50% 50%;
+  }
+}
+
+@keyframes intro-photon-stream {
+  0% {
+    background-position:
+      0 0,
+      60px 20px,
+      -20px 70px,
+      80px -30px,
+      -140% 50%,
+      50% 50%,
+      50% 50%,
+      50% 50%,
+      50% 50%;
+  }
+  100% {
+    background-position:
+      260px -110px,
+      340px -120px,
+      420px -60px,
+      360px -150px,
+      140% 50%,
+      50% 50%,
+      50% 50%,
+      50% 50%,
+      50% 50%;
+  }
 }
 
 @keyframes orbital-flow {
