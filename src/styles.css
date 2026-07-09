@@ -42,6 +42,9 @@ canvas {
   z-index: 1;
   overflow: hidden;
   background:
+    linear-gradient(180deg, rgba(0,0,0,.1), rgba(0,0,0,.2)),
+    radial-gradient(circle at 61% 52%, rgba(255, 205, 142, .18), transparent 28%),
+    url("./assets/intro/blackhole-poster.png") 61% center / cover no-repeat,
     radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .035), transparent 38%),
     #000;
   pointer-events: none;
@@ -92,11 +95,21 @@ canvas {
   transform: translate3d(-50%, -50%, 0) scale(calc(1.012 + var(--travel-progress, 0) * .72));
   transform-origin: 61% 50%;
   display: block;
-  background: #000;
+  background: transparent;
+  opacity: 0;
   filter: var(--intro-video-filter);
   image-rendering: auto;
-  will-change: transform;
+  transition: opacity .46s ease;
+  will-change: transform, opacity;
   backface-visibility: hidden;
+}
+
+#intro-video-stage.is-ready #intro-video {
+  opacity: 1;
+}
+
+#intro-video-stage.has-video-error #intro-video {
+  opacity: 0;
 }
 
 #wormhole-video-stage {

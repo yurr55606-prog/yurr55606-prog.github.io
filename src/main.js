@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import introBlackholeVideoUrl from './assets/intro/blackhole-entry.mov?url';
+import introBlackholeVideoUrl from './assets/intro/blackhole-entry.mp4?url';
+import introBlackholePosterUrl from './assets/intro/blackhole-poster.png?url';
 import wormholeTransitionVideoUrl from './assets/intro/wormhole-passage.mp4?url';
 import astronautIdleUrl from './assets/character/astronaut-idle.png?url';
 import astronautWaveUrl from './assets/character/astronaut-wave.png?url';
@@ -124,6 +125,7 @@ function setupIntroVideo() {
   const video = dom.introVideo;
   if (!video) return;
   video.src = introBlackholeVideoUrl;
+  video.poster = introBlackholePosterUrl;
   video.muted = true;
   video.defaultMuted = true;
   video.loop = true;
@@ -134,14 +136,29 @@ function setupIntroVideo() {
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
   video.setAttribute('disableremoteplayback', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('x5-playsinline', '');
+  video.setAttribute('x5-video-player-type', 'h5');
+  video.setAttribute('x5-video-player-fullscreen', 'false');
   video.addEventListener('pause', keepIntroVideoPlaying);
   video.addEventListener('ended', keepIntroVideoPlaying);
   video.addEventListener('stalled', keepIntroVideoPlaying);
   video.addEventListener('contextmenu', (event) => event.preventDefault());
-  video.addEventListener('loadeddata', () => {
+  const markIntroVideoReady = () => {
     dom.introVideoStage?.classList.add('is-ready');
+    dom.introVideoStage?.classList.remove('has-video-error');
+    video.classList.add('is-ready');
     keepIntroVideoPlaying();
-  }, { once: true });
+  };
+  video.addEventListener('loadeddata', markIntroVideoReady, { once: true });
+  video.addEventListener('canplay', markIntroVideoReady, { once: true });
+  video.addEventListener('playing', markIntroVideoReady);
+  video.addEventListener('error', () => {
+    dom.introVideoStage?.classList.add('has-video-error');
+    video.classList.remove('is-ready');
+    document.documentElement.dataset.introVideoLoadError = video.error?.code ? String(video.error.code) : 'MediaError';
+  });
+  video.load();
   keepIntroVideoPlaying();
 }
 
