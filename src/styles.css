@@ -42,7 +42,7 @@ canvas {
   z-index: 1;
   overflow: hidden;
   background:
-    url("./assets/intro/blackhole-poster.png") 61% center / cover no-repeat,
+    url("./assets/intro/blackhole-poster-enhanced.webp") 61% center / cover no-repeat,
     #000;
   pointer-events: none;
   opacity: 1;
@@ -402,6 +402,11 @@ body.is-in-space #wormhole-video-stage { opacity: 0; visibility: hidden; }
 body.is-in-space #warp-canvas { opacity: 0; visibility: hidden; }
 body.is-in-space #space-canvas { opacity: 1; }
 body.is-in-space.has-arrived-character #astronaut-canvas { opacity: 1; }
+body.is-in-space.has-arrived-character.is-character-exiting #astronaut-canvas {
+  opacity: 0;
+  transition-duration: .12s;
+  transition-timing-function: cubic-bezier(.7, 0, .95, .35);
+}
 
 #travel-copy {
   position: fixed;
@@ -693,13 +698,20 @@ body.has-panel #work-panel { transform: translateX(0); opacity: 1; visibility: v
 /* 摄影作品：双相册入口与纵向折叠胶片。 */
 body.has-photo-panel #work-panel {
   width: 100%;
-  padding: clamp(26px, 4.2vw, 64px);
-  overflow: hidden;
+  padding: clamp(24px, 3.4vw, 52px) clamp(22px, 4.2vw, 68px) clamp(48px, 6vw, 88px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background:
-    radial-gradient(circle at 78% 18%, rgba(105, 139, 157, .16), transparent 28%),
-    radial-gradient(circle at 16% 76%, rgba(169, 139, 107, .11), transparent 33%),
-    linear-gradient(135deg, rgba(5, 7, 9, .965), rgba(9, 12, 15, .985));
-  backdrop-filter: blur(42px) saturate(1.12);
+    radial-gradient(circle at 15% 12%, rgba(214, 235, 242, .14), transparent 28%),
+    radial-gradient(circle at 86% 82%, rgba(161, 199, 214, .08), transparent 30%),
+    linear-gradient(145deg, rgba(16, 22, 25, .28), rgba(3, 7, 9, .42));
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.11),
+    inset 0 -1px rgba(0,0,0,.38);
+  -webkit-backdrop-filter: blur(14px) saturate(.78) contrast(1.06);
+  backdrop-filter: blur(14px) saturate(.78) contrast(1.06);
 }
 
 body.has-photo-panel #work-panel::before {
@@ -707,44 +719,70 @@ body.has-photo-panel #work-panel::before {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: .24;
-  background-image:
-    linear-gradient(rgba(255,255,255,.034) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.034) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(115deg, transparent, #000 45%, transparent 86%);
+  z-index: 0;
+  opacity: .34;
+  background:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' seed='12' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='.55'/%3E%3C/svg%3E"),
+    linear-gradient(115deg, rgba(255,255,255,.12), transparent 22%, transparent 76%, rgba(0,0,0,.18));
+  background-size: 220px 220px, 100% 100%;
+  mix-blend-mode: soft-light;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,.94), rgba(0,0,0,.72));
 }
 
 body.has-photo-panel #close-panel {
   position: relative;
-  z-index: 9;
-  color: rgba(255,255,255,.62);
+  z-index: 12;
+  min-height: clamp(62px, 4.4vw, 76px);
+  margin: 2px 0 0;
+  padding: 0 clamp(26px, 2.4vw, 40px) 0 clamp(20px, 2vw, 32px);
+  gap: clamp(12px, 1vw, 18px);
+  color: rgba(255,255,255,.82);
+  border-color: rgba(205, 231, 255, .2);
+  background:
+    linear-gradient(115deg, rgba(255,255,255,.13), rgba(117, 190, 255, .045)),
+    rgba(6, 10, 13, .18);
+  font-size: clamp(18px, 1.35vw, 23px);
+  text-shadow: 0 0 14px rgba(205,235,255,.24);
+}
+
+body.has-photo-panel #close-panel span {
+  width: clamp(30px, 2.1vw, 38px);
+  height: clamp(30px, 2.1vw, 38px);
+  font-size: clamp(30px, 2.1vw, 38px);
 }
 
 body.has-photo-panel .panel-heading {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(220px, .7fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(250px, .75fr) minmax(320px, 1fr);
   align-items: end;
-  gap: 9vw;
-  margin: clamp(36px, 7vh, 78px) 0 clamp(28px, 5vh, 54px);
+  gap: 7vw;
+  margin: clamp(26px, 4.5vh, 48px) auto clamp(22px, 3.5vh, 34px);
+  max-width: min(78vw, 1260px);
   transition: opacity .45s ease, transform .65s cubic-bezier(.16,.8,.2,1);
 }
 
 body.has-photo-panel #panel-title {
-  font-size: clamp(34px, 5vw, 78px);
+  font-size: clamp(38px, 3.8vw, 58px);
   letter-spacing: .12em;
   white-space: nowrap;
 }
 
 body.has-photo-panel #panel-description {
-  max-width: 560px;
+  max-width: 620px;
   margin: 0;
-  font-size: clamp(11px, .9vw, 14px);
+  color: rgba(241,247,248,.58);
+  font-size: clamp(11px, .82vw, 14px);
 }
 
-.photo-folders { position: relative; z-index: 2; max-width: none; }
+.photo-folders {
+  position: relative;
+  z-index: 2;
+  max-width: min(76vw, 1240px);
+  margin: 0 auto;
+  padding-bottom: clamp(42px, 8vh, 96px);
+}
 
 .photo-folder-grid {
   display: grid;
@@ -759,10 +797,17 @@ body.has-photo-panel #panel-description {
   padding: 0;
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid rgba(255,255,255,.14);
+  border: 1px solid rgba(214, 238, 248, .2);
   border-radius: clamp(20px, 2.4vw, 38px);
-  background: rgba(255,255,255,.035);
-  box-shadow: 0 28px 90px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.09);
+  background:
+    linear-gradient(115deg, rgba(241,248,250,.14), rgba(113,139,151,.05)),
+    rgba(5, 10, 13, .24);
+  box-shadow:
+    0 28px 90px rgba(0,0,0,.3),
+    inset 0 1px rgba(255,255,255,.2),
+    inset 0 -1px rgba(255,255,255,.055);
+  -webkit-backdrop-filter: blur(10px) saturate(.82);
+  backdrop-filter: blur(10px) saturate(.82);
   cursor: pointer;
   text-align: left;
   transform: translateY(calc(var(--album-index) * 20px));
@@ -775,7 +820,9 @@ body.has-photo-panel #panel-description {
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent 26%, rgba(2,3,4,.18) 54%, rgba(2,3,4,.94));
+  background:
+    linear-gradient(115deg, rgba(255,255,255,.11), transparent 18%, transparent 74%, rgba(127,205,230,.06)),
+    linear-gradient(180deg, transparent 20%, rgba(2,3,4,.12) 52%, rgba(3,7,9,.86));
 }
 
 .photo-folder::after {
@@ -809,7 +856,7 @@ body.has-photo-panel #panel-description {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: saturate(.78) contrast(1.06) brightness(.84);
+  filter: saturate(.72) contrast(1.04) brightness(.8);
   transform: scale(calc(1.035 + var(--cover-order) * .025)) translateX(calc((var(--cover-order) - 1) * 2.2%));
   opacity: calc(1 - var(--cover-order) * .2);
   transition: transform 1.2s cubic-bezier(.16,.8,.2,1), filter .8s ease;
@@ -850,7 +897,14 @@ body.has-photo-panel #panel-description {
 .photo-folder > i::after { content: ""; position: absolute; right: 13px; top: 17px; width: 6px; height: 6px; border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); }
 .photo-folder:hover > i { color: #050607; background: rgba(255,255,255,.9); transform: rotate(-18deg); }
 
-body.has-photo-album #work-panel { padding: 0; }
+body.has-photo-album #work-panel {
+  padding: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(199, 229, 240, .11), transparent 29%),
+    radial-gradient(circle at 82% 78%, rgba(131, 178, 196, .07), transparent 32%),
+    rgba(4, 8, 10, .34);
+}
 body.has-photo-album #close-panel { position: fixed; top: clamp(24px, 4vw, 54px); left: clamp(24px, 4vw, 58px); }
 body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); pointer-events: none; }
 .photo-gallery-view { position: absolute; inset: 0; max-width: none; }
@@ -866,8 +920,8 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   height: 18vh;
   pointer-events: none;
 }
-.fold-gallery::before { top: 0; background: linear-gradient(#07090b 10%, transparent); }
-.fold-gallery::after { bottom: 0; background: linear-gradient(transparent, #07090b 90%); }
+.fold-gallery::before { top: 0; background: linear-gradient(rgba(5,9,12,.72) 5%, transparent); }
+.fold-gallery::after { bottom: 0; background: linear-gradient(transparent, rgba(5,9,12,.76) 94%); }
 
 .gallery-status {
   position: fixed;
@@ -918,8 +972,10 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   overflow: hidden;
   border: 1px solid rgba(255,255,255,calc(.08 + var(--proximity) * .22));
   border-radius: clamp(16px, 2vw, 28px);
-  background: rgba(255,255,255,.025);
-  box-shadow: 0 28px 80px rgba(0,0,0,.48);
+  background: rgba(229, 241, 245, .065);
+  box-shadow: 0 28px 80px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.1);
+  -webkit-backdrop-filter: blur(7px) saturate(.86);
+  backdrop-filter: blur(7px) saturate(.86);
   cursor: pointer;
   scroll-snap-align: center;
   scroll-snap-stop: always;
@@ -964,9 +1020,12 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   overflow: auto;
   border: 1px solid rgba(255,255,255,.11);
   border-radius: clamp(14px, 1.5vw, 22px);
-  background: rgba(5, 8, 10, .46);
-  box-shadow: 0 24px 70px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.055);
-  backdrop-filter: blur(18px) saturate(.86);
+  background:
+    linear-gradient(145deg, rgba(231,242,246,.12), rgba(72,91,100,.035)),
+    rgba(5, 8, 10, .3);
+  box-shadow: 0 24px 70px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.14);
+  -webkit-backdrop-filter: blur(12px) saturate(.78);
+  backdrop-filter: blur(12px) saturate(.78);
   scrollbar-width: none;
   overscroll-behavior: contain;
   mask-image: linear-gradient(transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
@@ -1099,6 +1158,93 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
 .video-player-start:hover,
 .video-player-start:focus-visible { outline: none; color: #07090a; background: rgba(255,255,255,.9); transform: translate(-50%, -50%) scale(1.06); }
 .video-player-shell.is-playing .video-player-start { opacity: 0; visibility: hidden; transform: translate(-50%, -50%) scale(.84); pointer-events: none; }
+.video-player-controls {
+  position: absolute;
+  z-index: 4;
+  left: clamp(14px, 1.6vw, 22px);
+  right: clamp(14px, 1.6vw, 22px);
+  bottom: clamp(14px, 1.6vw, 22px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: .8;
+  transition: opacity .3s ease;
+}
+.video-player-shell:hover .video-player-controls,
+.video-player-shell:focus-within .video-player-controls { opacity: 1; }
+.video-player-toggle {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  padding: 0 0 1px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 50%;
+  color: rgba(255,255,255,.92);
+  background: rgba(5, 9, 12, .38);
+  box-shadow: 0 8px 28px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.12);
+  font: 500 16px/1 system-ui, sans-serif;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  opacity: .72;
+  transition: opacity .3s ease, color .3s ease, background .3s ease, transform .35s cubic-bezier(.16,.8,.2,1);
+}
+.video-player-toggle:hover,
+.video-player-toggle:focus-visible {
+  outline: none;
+  opacity: 1;
+  color: #050708;
+  background: rgba(255,255,255,.92);
+  transform: scale(1.06);
+}
+.video-player-progress {
+  --video-progress: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 30px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.video-player-progress:disabled { cursor: default; opacity: .36; }
+.video-player-progress::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(235,249,255,.95) 0 var(--video-progress), rgba(255,255,255,.24) var(--video-progress) 100%);
+  box-shadow: 0 1px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.12);
+}
+.video-player-progress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 1px solid rgba(255,255,255,.84);
+  border-radius: 50%;
+  background: rgba(224,244,250,.98);
+  box-shadow: 0 0 14px rgba(173,226,247,.72);
+}
+.video-player-progress::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.24);
+}
+.video-player-progress::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(235,249,255,.95);
+}
+.video-player-progress::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255,255,255,.84);
+  border-radius: 50%;
+  background: rgba(224,244,250,.98);
+}
 .video-player-close {
   position: fixed;
   z-index: 2;
@@ -1172,9 +1318,22 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   .panel-heading { margin-top: 64px; }
   .work-card { grid-template-columns: 44px 1fr; gap: 12px; }
   body.has-photo-panel #work-panel { padding: 24px; }
+  body.has-photo-panel #work-panel {
+    -webkit-backdrop-filter: blur(8px) saturate(.76) contrast(1.04);
+    backdrop-filter: blur(8px) saturate(.76) contrast(1.04);
+  }
+  body.has-photo-panel #work-panel::before { opacity: .24; background-size: 180px 180px, 100% 100%; }
+  body.has-photo-panel #close-panel {
+    min-height: 56px;
+    padding: 0 20px 0 15px;
+    gap: 10px;
+    font-size: 16px;
+  }
+  body.has-photo-panel #close-panel span { width: 26px; height: 26px; font-size: 26px; }
   body.has-photo-panel .panel-heading { grid-template-columns: 1fr; gap: 18px; margin: 42px 0 26px; }
   body.has-photo-panel #panel-title { font-size: 34px; }
   body.has-photo-panel #panel-description { font-size: 10px; line-height: 1.7; }
+  .photo-folders { max-width: none; padding-bottom: 28px; }
   .photo-folder-grid { grid-template-columns: 1fr; gap: 16px; max-height: 65vh; overflow-y: auto; padding: 2px 2px 28px; scrollbar-width: none; }
   .photo-folder-grid::-webkit-scrollbar { display: none; }
   .photo-folder { height: 34vh; min-height: 250px; transform: none; border-radius: 22px; }

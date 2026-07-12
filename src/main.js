@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import introBlackholeVideoUrl from './assets/intro/blackhole-entry.mp4?url';
-import introBlackholePosterUrl from './assets/intro/blackhole-poster.png?url';
+import introBlackholeDesktopVideoUrl from './assets/intro/blackhole-entry-enhanced.mp4?url';
+import introBlackholeMobileVideoUrl from './assets/intro/blackhole-entry-mobile.mp4?url';
+import introBlackholePosterUrl from './assets/intro/blackhole-poster-enhanced.webp?url';
 import wormholeTransitionVideoUrl from './assets/intro/wormhole-passage.mp4?url';
 import astronautIdleUrl from './assets/character/astronaut-idle.png?url';
 import astronautWaveUrl from './assets/character/astronaut-wave.png?url';
@@ -17,6 +18,9 @@ import { astronautVertex, astronautFragment } from './shaders/astronaut.js';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmallScreen = window.matchMedia('(max-width: 720px)').matches;
+const introBlackholeVideoUrl = isSmallScreen
+  ? introBlackholeMobileVideoUrl
+  : introBlackholeDesktopVideoUrl;
 const blackholeDprCap = isSmallScreen ? 1.15 : 1.45;
 const spaceDprCap = isSmallScreen ? 0.72 : 0.88;
 
@@ -69,9 +73,86 @@ const smoothPointer = new THREE.Vector2();
 const clock = new THREE.Clock();
 let performanceWindowStartedAt = performance.now();
 let performanceFrameCount = 0;
+let lastSpaceRenderAt = 0;
 let introVideoRetryTimer = 0;
 let wormholeLoadStarted = false;
 let wormholeBoosted = false;
+
+function setLoadingProgress(value) {
+  if (!dom.loadingProgress) return;
+  dom.loadingProgress.textContent = String(Math.round(clamp(value, 0, 100)));
+}
+
+function preloadImage(url, timeout = 8000) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, timeout);
+    image.decoding = 'async';
+    image.onload = () => {
+      if (typeof image.decode === 'function') image.decode().catch(() => {}).finally(finish);
+      else finish();
+    };
+    image.onerror = finish;
+    image.src = url;
+  });
+}
+
+function waitForVideoBuffer(video, {
+  minimumSeconds = 1.5,
+  timeout = 10000,
+  progressStart = 0,
+  progressEnd = 100
+} = {}) {
+  return new Promise((resolve) => {
+    if (!video) {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const startedAt = performance.now();
+    const finish = (ready) => {
+      if (settled) return;
+      settled = true;
+      window.clearInterval(pollTimer);
+      window.clearTimeout(timeoutTimer);
+      video.removeEventListener('progress', inspect);
+      video.removeEventListener('canplay', inspect);
+      video.removeEventListener('canplaythrough', inspect);
+      video.removeEventListener('error', fail);
+      resolve(ready);
+    };
+    const fail = () => finish(false);
+    const inspect = () => {
+      let bufferedSeconds = 0;
+      if (video.buffered.length) {
+        bufferedSeconds = video.buffered.end(video.buffered.length - 1);
+      }
+      const target = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(minimumSeconds, Math.max(0.35, video.duration - 0.12))
+        : minimumSeconds;
+      const elapsedRatio = clamp((performance.now() - startedAt) / timeout, 0, 0.92);
+      const bufferRatio = clamp(bufferedSeconds / Math.max(target, 0.1), 0, 1);
+      setLoadingProgress(progressStart + (progressEnd - progressStart) * Math.max(bufferRatio, elapsedRatio * 0.25));
+      if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && bufferedSeconds >= target) {
+        finish(true);
+      }
+    };
+    const pollTimer = window.setInterval(inspect, 120);
+    const timeoutTimer = window.setTimeout(() => finish(video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA), timeout);
+    video.addEventListener('progress', inspect);
+    video.addEventListener('canplay', inspect);
+    video.addEventListener('canplaythrough', inspect);
+    video.addEventListener('error', fail, { once: true });
+    inspect();
+  });
+}
 
 function recordFrameRate(now) {
   performanceFrameCount += 1;
@@ -149,6 +230,7 @@ function setupIntroVideo() {
   video.autoplay = true;
   video.playsInline = true;
   video.preload = 'auto';
+  video.setAttribute('fetchpriority', 'high');
   video.controls = false;
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
@@ -199,7 +281,8 @@ function setupWormholeVideo() {
   video.loop = false;
   video.autoplay = false;
   video.playsInline = true;
-  video.preload = isSmallScreen ? 'metadata' : 'auto';
+  video.preload = 'auto';
+  video.setAttribute('fetchpriority', 'high');
   video.controls = false;
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
@@ -207,7 +290,6 @@ function setupWormholeVideo() {
   video.addEventListener('contextmenu', (event) => event.preventDefault());
   video.addEventListener('loadeddata', () => {
     wormholePrimed = true;
-    if (isSmallScreen) return;
     // 预热第一帧，避免用户点击进入时才触发高分辨率视频首次解码。
     const prime = video.play();
     if (prime) {
@@ -346,6 +428,7 @@ let astronautMaterial;
 let astronautGlow;
 let nextAstronautWaveAt = 0;
 let astronautWaveStartedAt = -1;
+let astronautPanelTimer = 0;
 const astronautBasePosition = new THREE.Vector3();
 const portalMaterials = [];
 const raycaster = new THREE.Raycaster();
@@ -1215,11 +1298,11 @@ async function createAstronaut() {
 function updateAstronaut(time, delta) {
   if (!astronautGroup || !astronautMaterial) return;
 
-  const travelReveal = astronautVisible ? 1 : 0;
+  const travelReveal = astronautVisible && !activeCategory ? 1 : 0;
   astronautMaterial.uniforms.uReveal.value = damp(
     astronautMaterial.uniforms.uReveal.value,
     travelReveal,
-    4.2,
+    activeCategory ? 18 : 4.2,
     delta
   );
   astronautGlow.material.opacity = 0.24 * astronautMaterial.uniforms.uReveal.value;
@@ -1436,6 +1519,10 @@ function updateSpace(time, delta) {
     libraryUniforms.uTime.value = reducedMotion ? 0.5 : time;
     libraryUniforms.uPointer.value.copy(smoothPointer);
     libraryUniforms.uDepth.value = depth;
+    // 作品内容位于磨砂层后方时，减少不可见的光线步进；正常五维空间保持完整精度。
+    libraryUniforms.uMaxSteps.value = activeCategory
+      ? (isSmallScreen ? 20 : 28)
+      : (isSmallScreen ? 38 : 48);
   }
 
   portals.forEach((portal, index) => {
@@ -1569,6 +1656,11 @@ function openCategory(key) {
   if (!category || !portal || state !== 'space' || !astronautVisible) return;
 
   activeCategory = key;
+  if (astronautPanelTimer) {
+    window.clearTimeout(astronautPanelTimer);
+    astronautPanelTimer = 0;
+  }
+  document.body.classList.add('is-character-exiting');
   stopBlinking();
   dom.panelTitle.textContent = category.title;
   dom.panelDescription.textContent = category.description;
@@ -1609,10 +1701,16 @@ function openCategory(key) {
     }));
   }
 
-  cameraTarget.set(portal.position.x * 0.55 - 1.8, portal.position.y * 0.5, portal.position.z + 6.8);
-  lookTarget.copy(portal.position);
   document.body.classList.add('has-panel');
   dom.panel.setAttribute('aria-hidden', 'false');
+  const moveCameraAfterCharacterExit = () => {
+    astronautPanelTimer = 0;
+    if (activeCategory !== key) return;
+    cameraTarget.set(portal.position.x * 0.55 - 1.8, portal.position.y * 0.5, portal.position.z + 6.8);
+    lookTarget.copy(portal.position);
+  };
+  if (reducedMotion) moveCameraAfterCharacterExit();
+  else astronautPanelTimer = window.setTimeout(moveCameraAfterCharacterExit, 140);
   window.setTimeout(() => dom.closePanel.focus({ preventScroll: true }), 700);
 }
 
@@ -2061,7 +2159,7 @@ function renderVideoGallery() {
     const thumbnailImage = document.createElement('img');
     thumbnailImage.src = item.poster;
     thumbnailImage.alt = '';
-    thumbnailImage.loading = 'eager';
+    thumbnailImage.loading = index < 4 ? 'eager' : 'lazy';
     thumbnailImage.decoding = 'async';
     thumbnail.append(thumbnailImage);
     thumbnail.addEventListener('click', () => {
@@ -2130,24 +2228,83 @@ function openVideoPlayer(item, index) {
   const video = document.createElement('video');
   video.src = item.src;
   video.poster = item.poster;
-  video.controls = true;
+  video.controls = false;
   video.autoplay = false;
   video.playsInline = true;
   video.preload = 'metadata';
+  video.disablePictureInPicture = true;
+  video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
+  video.setAttribute('disableremoteplayback', '');
+  video.addEventListener('contextmenu', (event) => event.preventDefault());
+
   const start = document.createElement('button');
   start.className = 'video-player-start';
   start.type = 'button';
   start.setAttribute('aria-label', '开始播放');
   start.innerHTML = '<span aria-hidden="true"></span>';
-  start.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const hasUserActivation = navigator.userActivation?.isActive === true;
-    video.muted = !hasUserActivation;
+  const toggle = document.createElement('button');
+  toggle.className = 'video-player-toggle';
+  toggle.type = 'button';
+  toggle.setAttribute('aria-label', '开始播放');
+  const controls = document.createElement('div');
+  controls.className = 'video-player-controls';
+  const progress = document.createElement('input');
+  progress.className = 'video-player-progress';
+  progress.type = 'range';
+  progress.min = '0';
+  progress.max = '1000';
+  progress.step = '1';
+  progress.value = '0';
+  progress.disabled = true;
+  progress.setAttribute('aria-label', '播放进度');
+
+  const syncPlaybackState = () => {
+    const isPlaying = !video.paused && !video.ended;
+    shell.classList.toggle('is-playing', isPlaying);
+    toggle.textContent = isPlaying ? 'Ⅱ' : '▶';
+    toggle.setAttribute('aria-label', isPlaying ? '暂停播放' : '开始播放');
+  };
+  const syncProgress = () => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    const ratio = clamp(video.currentTime / video.duration, 0, 1);
+    const value = Math.round(ratio * 1000);
+    progress.disabled = false;
+    progress.value = String(value);
+    progress.style.setProperty('--video-progress', `${(ratio * 100).toFixed(3)}%`);
+    progress.setAttribute('aria-valuetext', `${Math.floor(video.currentTime)} 秒 / ${Math.floor(video.duration)} 秒`);
+  };
+  const togglePlayback = () => {
+    if (!video.paused && !video.ended) {
+      video.pause();
+      return;
+    }
+    // 仅在用户主动点击播放时开启原声；自动播放失败时仍可保持静音继续播放。
+    video.muted = navigator.userActivation?.isActive !== true;
     video.play().catch((error) => {
       shell.dataset.playError = error?.name || 'PlaybackError';
     });
+  };
+  start.addEventListener('click', (event) => {
+    event.stopPropagation();
+    togglePlayback();
   });
-  video.addEventListener('playing', () => shell.classList.add('is-playing'));
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    togglePlayback();
+  });
+  progress.addEventListener('input', () => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    video.currentTime = (Number(progress.value) / 1000) * video.duration;
+    syncProgress();
+  });
+  video.addEventListener('click', togglePlayback);
+  video.addEventListener('playing', syncPlaybackState);
+  video.addEventListener('pause', syncPlaybackState);
+  video.addEventListener('ended', syncPlaybackState);
+  video.addEventListener('loadedmetadata', syncProgress);
+  video.addEventListener('durationchange', syncProgress);
+  video.addEventListener('timeupdate', syncProgress);
+  syncPlaybackState();
   const close = document.createElement('button');
   close.className = 'video-player-close';
   close.type = 'button';
@@ -2157,7 +2314,8 @@ function openVideoPlayer(item, index) {
   videoLightbox.addEventListener('click', (event) => {
     if (event.target === videoLightbox) closeVideoPlayer();
   });
-  shell.append(video, start);
+  controls.append(toggle, progress);
+  shell.append(video, start, controls);
   videoLightbox.append(close, shell);
   dom.panel.append(videoLightbox);
   close.focus({ preventScroll: true });
@@ -2181,6 +2339,10 @@ function closeCategory() {
   if (closePhotoAlbum()) return;
   if (closePluginDetail()) return;
   if (!activeCategory) return;
+  if (astronautPanelTimer) {
+    window.clearTimeout(astronautPanelTimer);
+    astronautPanelTimer = 0;
+  }
   activeCategory = null;
   activeVideoGallery = false;
   cameraTarget.set(0, 0, 15 + scrollDepth);
@@ -2189,6 +2351,13 @@ function closeCategory() {
   document.body.classList.remove('has-photo-panel', 'has-photo-album', 'has-video-gallery', 'has-video-player', 'has-plugin-panel', 'has-plugin-detail');
   dom.workList.className = 'work-list';
   dom.panel.setAttribute('aria-hidden', 'true');
+  const restoreCharacter = () => {
+    astronautPanelTimer = 0;
+    if (state !== 'space' || activeCategory) return;
+    document.body.classList.remove('is-character-exiting');
+  };
+  if (reducedMotion) restoreCharacter();
+  else astronautPanelTimer = window.setTimeout(restoreCharacter, 560);
   scheduleBlink();
 }
 
@@ -2245,7 +2414,17 @@ function animate(now) {
   else if (state === 'intro') clearWarpTransition();
   updateBlink(now);
   const shouldRenderSpace = state === 'space' && now >= spaceRenderResumeAt;
-  if (spaceRenderer && shouldRenderSpace) updateSpace(time, delta);
+  if (spaceRenderer && shouldRenderSpace) {
+    // 全屏磨砂作品面板打开时，以稳定的电影帧率继续呈现动态背景，
+    // 避免 WebGL、图片解码和 backdrop-filter 同时争抢每一个刷新帧。
+    const panelFrameInterval = activeCategory
+      ? 1000 / (videoLightbox ? (isSmallScreen ? 12 : 16) : (isSmallScreen ? 20 : 24))
+      : 0;
+    if (!panelFrameInterval || now - lastSpaceRenderAt >= panelFrameInterval) {
+      updateSpace(time, delta);
+      lastSpaceRenderAt = now;
+    }
+  }
   requestAnimationFrame(animate);
 }
 
@@ -2311,22 +2490,43 @@ function bindEvents() {
 
 async function init() {
   try {
-    let progress = 8;
-    dom.loadingProgress.textContent = progress;
+    setLoadingProgress(6);
     setupIntroVideo();
     setupWormholeVideo();
-    scheduleWormholeWarmup();
-    progress = 46;
-    dom.loadingProgress.textContent = progress;
+    setLoadingProgress(12);
+
+    // 首屏先准备高清底图和足够的黑洞视频缓冲，避免加载页消失后仍然黑屏或突然变糊。
+    await Promise.all([
+      preloadImage(introBlackholePosterUrl),
+      waitForVideoBuffer(dom.introVideo, {
+        minimumSeconds: 3.9,
+        timeout: isSmallScreen ? 12000 : 10000,
+        progressStart: 12,
+        progressEnd: 42
+      })
+    ]);
+    setLoadingProgress(44);
     await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // 五维空间、人物贴图和材质全部在加载页后方完成创建与 GPU 编译。
     await initSpace();
     updateSpace(clock.elapsedTime, 0.016);
-    progress = 88;
-    dom.loadingProgress.textContent = progress;
+    setLoadingProgress(78);
+
+    // 虫洞必须在用户点击前拥有连续缓冲；手机端也不再只加载 metadata。
+    boostWormholeVideoLoading();
+    await waitForVideoBuffer(dom.wormholeVideo, {
+      minimumSeconds: 3.7,
+      timeout: isSmallScreen ? 12000 : 9000,
+      progressStart: 78,
+      progressEnd: 95
+    });
+    setLoadingProgress(96);
+
     bindEvents();
     onResize();
-    await new Promise((resolve) => window.setTimeout(resolve, 260));
-    dom.loadingProgress.textContent = '100';
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    setLoadingProgress(100);
     state = 'intro';
     dom.loading.classList.add('is-hidden');
     requestAnimationFrame(animate);

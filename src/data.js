@@ -225,14 +225,15 @@ export const photoAlbums = [
 ];
 
 export const videoItems = [
-  { id: 'video-01', duration: '00:41' },
-  { id: 'video-02', duration: '00:14' },
-  { id: 'video-03', duration: '00:26' },
-  { id: 'video-04', duration: '00:08' },
-  { id: 'video-05', duration: '02:59' },
-  { id: 'video-06', duration: '01:00' }
+  { id: 'showreel-01', duration: '01:05' },
+  { id: 'showreel-02', duration: '00:41' },
+  { id: 'showreel-03', duration: '00:14' },
+  { id: 'showreel-04', duration: '00:08' },
+  { id: 'showreel-05', duration: '01:00' },
+  { id: 'showreel-06', duration: '00:26' },
+  { id: 'showreel-07', duration: '02:59' }
 ].map((item) => ({
   ...item,
-  src: resolveAsset(videoAssetUrls, `./assets/videos/${item.id}.mp4`),
-  poster: resolveAsset(videoAssetUrls, `./assets/videos/posters/${item.id}.png`)
+  src: resolveAsset(videoAssetUrls, `./assets/videos/showreel/${item.id}.mp4`),
+  poster: resolveAsset(videoAssetUrls, `./assets/videos/showreel/posters/${item.id}.png`)
 }));
