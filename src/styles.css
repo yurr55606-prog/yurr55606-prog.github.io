@@ -1270,6 +1270,13 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
 #webgl-fallback p { color: rgba(255,255,255,.45); line-height: 1.8; }
 
 @media (max-width: 720px) {
+  /* 手机端加载层直接复用高清静帧，网络较慢时不再长时间只显示纯黑。 */
+  #loading {
+    background:
+      linear-gradient(rgba(0, 0, 0, .18), rgba(0, 0, 0, .42)),
+      url("./assets/intro/blackhole-poster-enhanced.webp") 61% center / cover no-repeat,
+      #000;
+  }
   #close-panel {
     min-height: 58px;
     padding: 0 22px 0 16px;

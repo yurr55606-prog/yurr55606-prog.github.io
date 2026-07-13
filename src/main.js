@@ -77,6 +77,9 @@ let lastSpaceRenderAt = 0;
 let introVideoRetryTimer = 0;
 let wormholeLoadStarted = false;
 let wormholeBoosted = false;
+let deferredExperiencePromise = null;
+let deferredExperienceReady = false;
+let travelPreparationPending = false;
 
 function setLoadingProgress(value) {
   if (!dom.loadingProgress) return;
@@ -331,6 +334,33 @@ function scheduleWormholeWarmup() {
   } else {
     window.setTimeout(warmup, isSmallScreen ? 1800 : 500);
   }
+}
+
+// 手机端首屏只等待“可立即观看”的黑洞底图与第一帧：
+// 五维空间和完整虫洞缓冲改为进入首页后在后台完成，避免 5D WebGL 编译、
+// 人物贴图与第二段高码率视频共同阻塞首屏。桌面端仍沿用原来的完整预加载路径。
+function prepareDeferredMobileExperience() {
+  if (!isSmallScreen) return Promise.resolve();
+  if (deferredExperiencePromise) return deferredExperiencePromise;
+
+  deferredExperiencePromise = (async () => {
+    setupWormholeVideo();
+    const spaceTask = initSpace();
+    const wormholeTask = waitForVideoBuffer(dom.wormholeVideo, {
+      minimumSeconds: 3.7,
+      timeout: 12000
+    });
+    await Promise.all([spaceTask, wormholeTask]);
+    updateSpace(clock.elapsedTime, 0.016);
+    deferredExperienceReady = true;
+    document.documentElement.dataset.mobileExperienceReady = 'true';
+  })().catch((error) => {
+    document.documentElement.dataset.mobileExperienceReady = 'failed';
+    console.error('手机端后台资源准备失败：', error);
+    throw error;
+  });
+
+  return deferredExperiencePromise;
 }
 
 function clearWarpTransition() {
@@ -1548,6 +1578,23 @@ function updateSpace(time, delta) {
 
 function beginTravel() {
   if (state !== 'intro') return;
+  // 用户很快点击时，留在已经显示的高清黑洞画面中等待后台资源就绪，
+  // 而不是用未解码的虫洞视频直接开始转场并造成中途卡顿。
+  if (isSmallScreen && !deferredExperienceReady) {
+    if (travelPreparationPending) return;
+    travelPreparationPending = true;
+    dom.enter.disabled = true;
+    dom.enter.setAttribute('aria-busy', 'true');
+    prepareDeferredMobileExperience()
+      .catch(() => {})
+      .finally(() => {
+        travelPreparationPending = false;
+        dom.enter.disabled = false;
+        dom.enter.removeAttribute('aria-busy');
+        if (state === 'intro' && deferredExperienceReady) beginTravel();
+      });
+    return;
+  }
   if (deferredWormholeReset) {
     window.clearTimeout(deferredWormholeReset);
     deferredWormholeReset = 0;
@@ -2492,8 +2539,40 @@ async function init() {
   try {
     setLoadingProgress(6);
     setupIntroVideo();
-    setupWormholeVideo();
     setLoadingProgress(12);
+
+    if (isSmallScreen) {
+      // 不把 6.9MB 黑洞视频的完整缓存、5D 场景和虫洞视频作为首屏门槛。
+      // 保留原始视频与原分辨率，只把首屏判定降为“高清底图已到 + 可播放首帧”。
+      await Promise.all([
+        // 网络异常时也不能让加载页停留数秒；静帧仍会在抵达后自动接管背景。
+        preloadImage(introBlackholePosterUrl, 2600),
+        waitForVideoBuffer(dom.introVideo, {
+          minimumSeconds: 0.18,
+          timeout: 2400,
+          progressStart: 12,
+          progressEnd: 76
+        })
+      ]);
+      setLoadingProgress(88);
+      bindEvents();
+      onResize();
+      state = 'intro';
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      setLoadingProgress(100);
+      dom.loading.classList.add('is-hidden');
+      requestAnimationFrame(animate);
+
+      const prepare = () => prepareDeferredMobileExperience().catch(() => {});
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(prepare, { timeout: 900 });
+      } else {
+        window.setTimeout(prepare, 180);
+      }
+      return;
+    }
+
+    setupWormholeVideo();
 
     // 首屏先准备高清底图和足够的黑洞视频缓冲，避免加载页消失后仍然黑屏或突然变糊。
     await Promise.all([
