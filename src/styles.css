@@ -1329,6 +1329,28 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
     -webkit-backdrop-filter: blur(8px) saturate(.76) contrast(1.04);
     backdrop-filter: blur(8px) saturate(.76) contrast(1.04);
   }
+  body.is-mobile-media-preparing #work-panel::after {
+    content: "正在准备作品";
+    position: fixed;
+    z-index: 30;
+    left: 50%;
+    top: 50%;
+    padding: 11px 18px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    color: rgba(255,255,255,.72);
+    background: rgba(5,8,10,.72);
+    font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .16em;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  body.is-mobile-media-preparing #work-list {
+    opacity: .62;
+    pointer-events: none;
+  }
   body.has-photo-panel #work-panel::before { opacity: .24; background-size: 180px 180px, 100% 100%; }
   body.has-photo-panel #close-panel {
     min-height: 56px;
@@ -1351,7 +1373,17 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   .gallery-status { top: 27px; right: 20px; }
   .gallery-status > span { display: none; }
   .fold-gallery-track { gap: 10vh; padding: 34vh 0; }
-  .fold-photo { width: 68vw; flex-basis: 34vh; border-radius: 18px; }
+  .fold-photo {
+    width: 68vw;
+    flex-basis: 34vh;
+    border-radius: 18px;
+    will-change: auto;
+    contain: layout paint;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .fold-photo.is-active { will-change: transform; }
+  .fold-photo .photo-backdrop { display: none; }
   .gallery-rail { left: 50%; bottom: 18%; }
   .fold-gallery-track { right: 0; padding-bottom: 43vh; }
   .gallery-overview {
@@ -1378,7 +1410,12 @@ body.has-photo-album .panel-heading { opacity: 0; transform: translateY(-24px); 
   .video-slide-play { width: 48px; }
   .video-gallery-overview .video-overview-thumb { width: 74px; height: 60px; aspect-ratio: auto; }
   .video-gallery-overview { grid-auto-columns: 74px; }
-  .video-lightbox { padding: 16px; }
+  .video-lightbox {
+    padding: 16px;
+    background: rgba(0, 0, 0, .94);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   .video-player-shell { width: 100%; border-radius: 15px; }
   .video-player-close { top: 18px; right: 18px; width: 40px; height: 40px; }
 }

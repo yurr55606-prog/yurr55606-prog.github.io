@@ -201,7 +201,8 @@ const makePhotoItems = (folder, prefix, count, excluded = []) => {
       src: resolveAsset(
         photoAssetUrls,
         `./assets/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.jpg`
-      )
+      ),
+      thumbnail: `/thumbs/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.webp`
     }));
 };
 
@@ -235,5 +236,6 @@ export const videoItems = [
 ].map((item) => ({
   ...item,
   src: resolveAsset(videoAssetUrls, `./assets/videos/showreel/${item.id}.mp4`),
-  poster: resolveAsset(videoAssetUrls, `./assets/videos/showreel/posters/${item.id}.png`)
+  poster: resolveAsset(videoAssetUrls, `./assets/videos/showreel/posters/${item.id}.png`),
+  thumbnail: `/thumbs/videos/${item.id}.webp`
 }));

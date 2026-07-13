@@ -80,6 +80,8 @@ let wormholeBoosted = false;
 let deferredExperiencePromise = null;
 let deferredExperienceReady = false;
 let travelPreparationPending = false;
+let panelMediaObservers = [];
+let mobileMediaPreparationTimer = 0;
 
 function setLoadingProgress(value) {
   if (!dom.loadingProgress) return;
@@ -105,6 +107,101 @@ function preloadImage(url, timeout = 8000) {
     image.onerror = finish;
     image.src = url;
   });
+}
+
+function loadManagedImage(image) {
+  const source = image?.dataset?.src;
+  if (!source) return;
+  image.removeAttribute('data-src');
+  image.src = source;
+}
+
+function configureManagedImage(image, source, { immediate = false } = {}) {
+  image.decoding = 'async';
+  image.loading = immediate ? 'eager' : 'lazy';
+  if ('fetchPriority' in image) image.fetchPriority = immediate ? 'high' : 'low';
+  if (!isSmallScreen || immediate) image.src = source;
+  else image.dataset.src = source;
+}
+
+function observeManagedImages(container, scrollRoot, rootMargin = '70% 0px') {
+  if (!isSmallScreen || !container) return;
+  const images = [...container.querySelectorAll('img[data-src]')];
+  if (!images.length) return;
+  if (!('IntersectionObserver' in window)) {
+    images.forEach(loadManagedImage);
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      loadManagedImage(entry.target);
+      observer.unobserve(entry.target);
+    });
+  }, { root: scrollRoot || null, rootMargin, threshold: 0.01 });
+  images.forEach((image) => observer.observe(image));
+  panelMediaObservers.push(observer);
+}
+
+function disposePanelMedia() {
+  panelMediaObservers.forEach((observer) => observer.disconnect());
+  panelMediaObservers = [];
+  dom.workList?.querySelectorAll('video').forEach((video) => {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  });
+  dom.workList?.querySelectorAll('img').forEach((image) => {
+    image.removeAttribute('src');
+    image.removeAttribute('data-src');
+  });
+}
+
+function replaceWorkList(...nodes) {
+  disposePanelMedia();
+  dom.workList.replaceChildren(...nodes);
+}
+
+function settleMobileMediaPreparation(container) {
+  if (!isSmallScreen) return;
+  window.clearTimeout(mobileMediaPreparationTimer);
+  document.body.classList.add('is-mobile-media-preparing');
+  const startedAt = performance.now();
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    const remaining = Math.max(0, 340 - (performance.now() - startedAt));
+    mobileMediaPreparationTimer = window.setTimeout(() => {
+      document.body.classList.remove('is-mobile-media-preparing');
+      mobileMediaPreparationTimer = 0;
+    }, remaining);
+  };
+  const firstImage = container?.querySelector('img[src]');
+  if (firstImage?.complete && firstImage.naturalWidth > 0) finish();
+  else {
+    firstImage?.addEventListener('load', finish, { once: true });
+    firstImage?.addEventListener('error', finish, { once: true });
+    mobileMediaPreparationTimer = window.setTimeout(finish, 1200);
+  }
+}
+
+function releaseCompletedTravelMedia() {
+  if (!isSmallScreen || state !== 'space') return;
+  if (introVideoRetryTimer) {
+    window.clearInterval(introVideoRetryTimer);
+    introVideoRetryTimer = 0;
+  }
+  [dom.introVideo, dom.wormholeVideo].forEach((video) => {
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  });
+  wormholePrimed = false;
+  wormholeLoadStarted = false;
+  wormholeBoosted = false;
+  document.documentElement.dataset.travelMediaReleased = 'true';
 }
 
 function waitForVideoBuffer(video, {
@@ -1662,6 +1759,8 @@ function finishTravel() {
   dom.spaceCanvas.style.clipPath = '';
   dom.spaceUi.setAttribute('aria-hidden', 'false');
   setArrivalPhase('space-complete');
+  // 手机完成转场后不再保留两套高分辨率视频解码器，给摄影与影像页面腾出内存。
+  if (isSmallScreen) window.setTimeout(releaseCompletedTravelMedia, 420);
   // 先让五维空间稳定接管，再触发眨眼；避免在转场结束帧强制重启动画造成卡顿。
   window.setTimeout(() => requestAnimationFrame(() => {
     if (state !== 'space' || activeCategory || astronautVisible) return;
@@ -1728,7 +1827,7 @@ function openCategory(key) {
     renderVideoGallery();
   } else {
     dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
-    dom.workList.replaceChildren(...category.works.map((work) => {
+    replaceWorkList(...category.works.map((work) => {
       const article = document.createElement('article');
       article.className = 'work-card';
       const year = document.createElement('span');
@@ -1844,7 +1943,7 @@ function renderPluginGrid() {
     grid.append(card);
   });
 
-  dom.workList.replaceChildren(grid);
+  replaceWorkList(grid);
 }
 
 function openPluginDetail(pluginId) {
@@ -1976,7 +2075,7 @@ function openPluginDetail(pluginId) {
   }
 
   detail.append(identity, content);
-  dom.workList.replaceChildren(detail);
+  replaceWorkList(detail);
   dom.panel.scrollTo({ top: 0, behavior: 'auto' });
 }
 
@@ -2007,10 +2106,10 @@ function renderPhotoFolders() {
     stack.className = 'photo-folder-stack';
     album.covers.forEach((coverIndex, coverOrder) => {
       const image = document.createElement('img');
-      image.src = album.items[coverIndex - 1].src;
       image.alt = '';
-      image.loading = 'eager';
-      image.decoding = 'async';
+      configureManagedImage(image, album.items[coverIndex - 1].src, {
+        immediate: !isSmallScreen || coverOrder === 0
+      });
       image.style.setProperty('--cover-order', coverOrder);
       stack.append(image);
     });
@@ -2033,7 +2132,9 @@ function renderPhotoFolders() {
   });
 
   dom.workList.className = 'work-list photo-folders';
-  dom.workList.replaceChildren(grid);
+  replaceWorkList(grid);
+  observeManagedImages(grid, grid, '65% 0px');
+  settleMobileMediaPreparation(grid);
 }
 
 function openPhotoAlbum(albumId) {
@@ -2066,15 +2167,16 @@ function openPhotoAlbum(albumId) {
     frame.dataset.index = String(index);
     frame.setAttribute('aria-label', `查看第 ${index + 1} 张作品`);
     const image = document.createElement('img');
-    image.src = item.src;
     image.alt = '';
-    image.loading = index < 3 ? 'eager' : 'lazy';
-    image.decoding = 'async';
     image.className = 'photo-image';
-    const backdrop = image.cloneNode();
-    backdrop.className = 'photo-backdrop';
-    backdrop.setAttribute('aria-hidden', 'true');
-    frame.append(backdrop, image);
+    configureManagedImage(image, item.src, { immediate: !isSmallScreen || index === 0 });
+    if (!isSmallScreen) {
+      const backdrop = image.cloneNode();
+      backdrop.className = 'photo-backdrop';
+      backdrop.setAttribute('aria-hidden', 'true');
+      frame.append(backdrop);
+    }
+    frame.append(image);
     frame.addEventListener('click', () => frame.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' }));
     track.append(frame);
 
@@ -2084,10 +2186,10 @@ function openPhotoAlbum(albumId) {
     thumbnail.dataset.index = String(index);
     thumbnail.setAttribute('aria-label', `跳转到第 ${index + 1} 张照片`);
     const thumbnailImage = document.createElement('img');
-    thumbnailImage.src = item.src;
     thumbnailImage.alt = '';
-    thumbnailImage.loading = index < 12 ? 'eager' : 'lazy';
-    thumbnailImage.decoding = 'async';
+    configureManagedImage(thumbnailImage, isSmallScreen ? item.thumbnail : item.src, {
+      immediate: !isSmallScreen || index < 3
+    });
     thumbnail.append(thumbnailImage);
     thumbnail.addEventListener('click', () => {
       frame.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
@@ -2101,7 +2203,10 @@ function openPhotoAlbum(albumId) {
   rail.setAttribute('aria-hidden', 'true');
   gallery.append(status, rail, track, overview);
   dom.workList.className = 'work-list photo-gallery-view';
-  dom.workList.replaceChildren(gallery);
+  replaceWorkList(gallery);
+  observeManagedImages(track, track, '75% 0px');
+  observeManagedImages(overview, overview, '0px 80%');
+  settleMobileMediaPreparation(gallery);
 
   const update = () => {
     galleryScrollFrame = 0;
@@ -2183,18 +2288,19 @@ function renderVideoGallery() {
     frame.setAttribute('aria-label', `放大播放第 ${index + 1} 段影像`);
 
     const poster = document.createElement('img');
-    poster.src = item.poster;
     poster.alt = '';
-    poster.loading = index < 3 ? 'eager' : 'lazy';
-    poster.decoding = 'async';
     poster.className = 'photo-image';
-    const backdrop = poster.cloneNode();
-    backdrop.className = 'photo-backdrop';
-    backdrop.setAttribute('aria-hidden', 'true');
+    configureManagedImage(poster, item.poster, { immediate: !isSmallScreen || index === 0 });
     const play = document.createElement('span');
     play.className = 'video-slide-play';
     play.setAttribute('aria-hidden', 'true');
-    frame.append(backdrop, poster, play);
+    if (!isSmallScreen) {
+      const backdrop = poster.cloneNode();
+      backdrop.className = 'photo-backdrop';
+      backdrop.setAttribute('aria-hidden', 'true');
+      frame.append(backdrop);
+    }
+    frame.append(poster, play);
     frame.addEventListener('click', () => openVideoPlayer(item, index));
     track.append(frame);
 
@@ -2204,10 +2310,10 @@ function renderVideoGallery() {
     thumbnail.dataset.index = String(index);
     thumbnail.setAttribute('aria-label', `跳转到第 ${index + 1} 段影像`);
     const thumbnailImage = document.createElement('img');
-    thumbnailImage.src = item.poster;
     thumbnailImage.alt = '';
-    thumbnailImage.loading = index < 4 ? 'eager' : 'lazy';
-    thumbnailImage.decoding = 'async';
+    configureManagedImage(thumbnailImage, isSmallScreen ? item.thumbnail : item.poster, {
+      immediate: !isSmallScreen || index < 2
+    });
     thumbnail.append(thumbnailImage);
     thumbnail.addEventListener('click', () => {
       frame.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
@@ -2221,7 +2327,10 @@ function renderVideoGallery() {
   rail.setAttribute('aria-hidden', 'true');
   gallery.append(status, rail, track, overview);
   dom.workList.className = 'work-list photo-gallery-view video-gallery-view';
-  dom.workList.replaceChildren(gallery);
+  replaceWorkList(gallery);
+  observeManagedImages(track, track, '75% 0px');
+  observeManagedImages(overview, overview, '0px 80%');
+  settleMobileMediaPreparation(gallery);
 
   const update = () => {
     galleryScrollFrame = 0;
@@ -2273,12 +2382,13 @@ function openVideoPlayer(item, index) {
   const shell = document.createElement('div');
   shell.className = 'video-player-shell';
   const video = document.createElement('video');
-  video.src = item.src;
+  if (isSmallScreen) video.dataset.src = item.src;
+  else video.src = item.src;
   video.poster = item.poster;
   video.controls = false;
   video.autoplay = false;
   video.playsInline = true;
-  video.preload = 'metadata';
+  video.preload = isSmallScreen ? 'none' : 'metadata';
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
   video.setAttribute('disableremoteplayback', '');
@@ -2325,6 +2435,12 @@ function openVideoPlayer(item, index) {
       video.pause();
       return;
     }
+    if (!video.getAttribute('src') && video.dataset.src) {
+      video.src = video.dataset.src;
+      video.removeAttribute('data-src');
+      video.load();
+      shell.classList.add('is-buffering');
+    }
     // 仅在用户主动点击播放时开启原声；自动播放失败时仍可保持静音继续播放。
     video.muted = navigator.userActivation?.isActive !== true;
     video.play().catch((error) => {
@@ -2346,6 +2462,8 @@ function openVideoPlayer(item, index) {
   });
   video.addEventListener('click', togglePlayback);
   video.addEventListener('playing', syncPlaybackState);
+  video.addEventListener('playing', () => shell.classList.remove('is-buffering'));
+  video.addEventListener('canplay', () => shell.classList.remove('is-buffering'));
   video.addEventListener('pause', syncPlaybackState);
   video.addEventListener('ended', syncPlaybackState);
   video.addEventListener('loadedmetadata', syncProgress);
@@ -2396,7 +2514,12 @@ function closeCategory() {
   lookTarget.set(0, 0, -18);
   document.body.classList.remove('has-panel');
   document.body.classList.remove('has-photo-panel', 'has-photo-album', 'has-video-gallery', 'has-video-player', 'has-plugin-panel', 'has-plugin-detail');
+  document.body.classList.remove('is-mobile-media-preparing');
+  window.clearTimeout(mobileMediaPreparationTimer);
+  mobileMediaPreparationTimer = 0;
+  disposePanelMedia();
   dom.workList.className = 'work-list';
+  dom.workList.replaceChildren();
   dom.panel.setAttribute('aria-hidden', 'true');
   const restoreCharacter = () => {
     astronautPanelTimer = 0;
@@ -2460,7 +2583,8 @@ function animate(now) {
   if (state === 'traveling') updateTravel(now);
   else if (state === 'intro') clearWarpTransition();
   updateBlink(now);
-  const shouldRenderSpace = state === 'space' && now >= spaceRenderResumeAt;
+  const mobileMediaPanelOpen = isSmallScreen && (activeCategory === 'photo' || activeCategory === 'video');
+  const shouldRenderSpace = state === 'space' && now >= spaceRenderResumeAt && !mobileMediaPanelOpen;
   if (spaceRenderer && shouldRenderSpace) {
     // 全屏磨砂作品面板打开时，以稳定的电影帧率继续呈现动态背景，
     // 避免 WebGL、图片解码和 backdrop-filter 同时争抢每一个刷新帧。
