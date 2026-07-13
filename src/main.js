@@ -80,6 +80,8 @@ let wormholeBoosted = false;
 let deferredExperiencePromise = null;
 let deferredExperienceReady = false;
 let travelPreparationPending = false;
+let mobileWormholeStartPromise = null;
+let mobileWormholeGestureTimer = 0;
 let panelMediaObservers = [];
 let mobileMediaPreparationTimer = 0;
 
@@ -375,7 +377,6 @@ function setupIntroVideo() {
 function setupWormholeVideo() {
   const video = dom.wormholeVideo;
   if (!video) return;
-  video.src = wormholeTransitionVideoUrl;
   video.muted = true;
   video.defaultMuted = true;
   video.loop = false;
@@ -387,9 +388,19 @@ function setupWormholeVideo() {
   video.disablePictureInPicture = true;
   video.setAttribute('controlsList', 'nodownload noplaybackrate nofullscreen');
   video.setAttribute('disableremoteplayback', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('x5-playsinline', '');
+  video.setAttribute('x5-video-player-type', 'h5');
+  video.setAttribute('x5-video-player-fullscreen', 'false');
+  video.setAttribute('muted', '');
+  video.src = wormholeTransitionVideoUrl;
   video.addEventListener('contextmenu', (event) => event.preventDefault());
   video.addEventListener('loadeddata', () => {
     wormholePrimed = true;
+    // 微信与 iOS 内嵌浏览器会拦截非手势阶段的 play/pause 预热，
+    // 甚至可能让下一次真实点击也停留在黑帧。手机端只完成解码，
+    // 真正播放交给 pointerdown/touchstart 的用户手势。
+    if (isSmallScreen) return;
     // 预热第一帧，避免用户点击进入时才触发高分辨率视频首次解码。
     const prime = video.play();
     if (prime) {
@@ -407,6 +418,72 @@ function setupWormholeVideo() {
   }, { once: true });
   video.load();
   wormholeLoadStarted = true;
+}
+
+function armMobileWormholePlayback() {
+  if (!isSmallScreen || state !== 'intro') return Promise.resolve(false);
+  if (mobileWormholeStartPromise) return mobileWormholeStartPromise;
+
+  const video = dom.wormholeVideo;
+  if (!video) return Promise.resolve(false);
+  boostWormholeVideoLoading();
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('x5-playsinline', '');
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) video.load();
+  if (video.ended || video.currentTime > 0.25) {
+    try { video.currentTime = 0.001; } catch {}
+  }
+
+  mobileWormholeStartPromise = new Promise((resolve) => {
+    let settled = false;
+    const finish = (started, error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutTimer);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('error', onError);
+      if (started) {
+        delete document.documentElement.dataset.wormholeVideoPlayError;
+        document.documentElement.dataset.mobileWormholePlayback = 'playing';
+      } else {
+        document.documentElement.dataset.mobileWormholePlayback = 'blocked';
+        document.documentElement.dataset.wormholeVideoPlayError = error?.name || 'PlaybackTimeout';
+        video.pause();
+        try { video.currentTime = 0.001; } catch {}
+        mobileWormholeStartPromise = null;
+      }
+      resolve(started);
+    };
+    const onPlaying = () => finish(true);
+    const onTimeUpdate = () => {
+      if (!video.paused && video.currentTime > 0.015) finish(true);
+    };
+    const onError = () => finish(false, video.error || new Error('MediaError'));
+    const timeoutTimer = window.setTimeout(() => finish(false, new Error('PlaybackTimeout')), 2600);
+    video.addEventListener('playing', onPlaying, { once: true });
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('error', onError, { once: true });
+    const playResult = video.play();
+    if (playResult) playResult.then(() => finish(true)).catch((error) => finish(false, error));
+    else if (!video.paused) finish(true);
+  });
+
+  window.clearTimeout(mobileWormholeGestureTimer);
+  mobileWormholeGestureTimer = window.setTimeout(() => {
+    mobileWormholeGestureTimer = 0;
+    if (state !== 'intro' || travelPreparationPending) return;
+    video.pause();
+    try { video.currentTime = 0.001; } catch {}
+    mobileWormholeStartPromise = null;
+  }, 1800);
+
+  return mobileWormholeStartPromise;
 }
 
 function boostWormholeVideoLoading() {
@@ -1673,25 +1750,8 @@ function updateSpace(time, delta) {
   }
 }
 
-function beginTravel() {
+function startTravelTimeline({ wormholeAlreadyPlaying = false } = {}) {
   if (state !== 'intro') return;
-  // 用户很快点击时，留在已经显示的高清黑洞画面中等待后台资源就绪，
-  // 而不是用未解码的虫洞视频直接开始转场并造成中途卡顿。
-  if (isSmallScreen && !deferredExperienceReady) {
-    if (travelPreparationPending) return;
-    travelPreparationPending = true;
-    dom.enter.disabled = true;
-    dom.enter.setAttribute('aria-busy', 'true');
-    prepareDeferredMobileExperience()
-      .catch(() => {})
-      .finally(() => {
-        travelPreparationPending = false;
-        dom.enter.disabled = false;
-        dom.enter.removeAttribute('aria-busy');
-        if (state === 'intro' && deferredExperienceReady) beginTravel();
-      });
-    return;
-  }
   if (deferredWormholeReset) {
     window.clearTimeout(deferredWormholeReset);
     deferredWormholeReset = 0;
@@ -1720,16 +1780,64 @@ function beginTravel() {
   clearWarpTransition();
   boostWormholeVideoLoading();
   [dom.wormholeVideo].filter(Boolean).forEach((video) => {
-    if (!wormholePrimed || video.ended || video.currentTime > 0.25) {
+    if (!wormholeAlreadyPlaying && (!wormholePrimed || video.ended || video.currentTime > 0.25)) {
       try { video.currentTime = 0.001; } catch {}
     }
-    video.play().catch((error) => {
-      document.documentElement.dataset.wormholeVideoPlayError = error?.name || 'PlaybackError';
-    });
+    if (!wormholeAlreadyPlaying) {
+      video.play().catch((error) => {
+        document.documentElement.dataset.wormholeVideoPlayError = error?.name || 'PlaybackError';
+      });
+    }
   });
   dom.spaceCanvas.style.clipPath = '';
   dom.enter.disabled = true;
   keepIntroVideoPlaying();
+}
+
+function beginTravel() {
+  if (state !== 'intro') return;
+  // 用户很快点击时，留在已经显示的高清黑洞画面中等待后台资源就绪，
+  // 而不是用未解码的虫洞视频直接开始转场并造成中途卡顿。
+  if (isSmallScreen && !deferredExperienceReady) {
+    if (travelPreparationPending) return;
+    travelPreparationPending = true;
+    dom.enter.disabled = true;
+    dom.enter.setAttribute('aria-busy', 'true');
+    prepareDeferredMobileExperience()
+      .catch(() => {})
+      .finally(() => {
+        travelPreparationPending = false;
+        dom.enter.disabled = false;
+        dom.enter.removeAttribute('aria-busy');
+        if (state === 'intro' && deferredExperienceReady) beginTravel();
+      });
+    return;
+  }
+
+  if (!isSmallScreen) {
+    startTravelTimeline();
+    return;
+  }
+
+  // 手机端必须先确认虫洞视频真正进入播放状态，再开始淡出黑洞。
+  // 这样即使微信浏览器拒绝播放或网络仍未就绪，也只会停留在首页，
+  // 不会把用户带进一个无法恢复的黑屏转场。
+  if (travelPreparationPending) return;
+  travelPreparationPending = true;
+  dom.enter.disabled = true;
+  dom.enter.setAttribute('aria-busy', 'true');
+  window.clearTimeout(mobileWormholeGestureTimer);
+  mobileWormholeGestureTimer = 0;
+  armMobileWormholePlayback().then((started) => {
+    travelPreparationPending = false;
+    dom.enter.removeAttribute('aria-busy');
+    if (state !== 'intro') return;
+    if (!started) {
+      dom.enter.disabled = false;
+      return;
+    }
+    requestAnimationFrame(() => startTravelTimeline({ wormholeAlreadyPlaying: true }));
+  });
 }
 
 function finishTravel() {
@@ -2604,11 +2712,13 @@ function bindEvents() {
   window.addEventListener('resize', onResize);
   window.addEventListener('wheel', onWheel, { passive: true });
   window.addEventListener('touchstart', () => {
-    wakeIntroVideo();
+    if (state === 'intro' && isSmallScreen) armMobileWormholePlayback();
+    else wakeIntroVideo();
     if (state === 'intro') boostWormholeVideoLoading();
   }, { passive: true });
   window.addEventListener('pointerdown', () => {
-    wakeIntroVideo();
+    if (state === 'intro' && isSmallScreen) armMobileWormholePlayback();
+    else wakeIntroVideo();
     if (state === 'intro') boostWormholeVideoLoading();
   }, { passive: true });
   dom.intro.addEventListener('click', beginTravel);
