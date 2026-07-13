@@ -2666,33 +2666,54 @@ async function init() {
     setLoadingProgress(12);
 
     if (isSmallScreen) {
-      // 不把 6.9MB 黑洞视频的完整缓存、5D 场景和虫洞视频作为首屏门槛。
-      // 保留原始视频与原分辨率，只把首屏判定降为“高清底图已到 + 可播放首帧”。
+      const mobileBootStartedAt = performance.now();
+      // 手机端先把黑洞视频准备到可稳定播放。相比只等一帧会稍慢一点，
+      // 但加载层消失后不会再被视频首次解码打断。
       await Promise.all([
-        // 网络异常时也不能让加载页停留数秒；静帧仍会在抵达后自动接管背景。
-        preloadImage(introBlackholePosterUrl, 2600),
+        preloadImage(introBlackholePosterUrl, 3600),
         waitForVideoBuffer(dom.introVideo, {
-          minimumSeconds: 0.18,
-          timeout: 2400,
+          minimumSeconds: 0.9,
+          timeout: 3600,
           progressStart: 12,
-          progressEnd: 76
+          progressEnd: 38
         })
       ]);
-      setLoadingProgress(88);
+      setLoadingProgress(42);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      // 3D 场景的创建与 GPU 编译是之前黑洞首页“卡住”的根因。
+      // 现在让它在加载层后方完成，页面出现后不再执行整段同步重任务。
+      await initSpace();
+      updateSpace(clock.elapsedTime, 0.016);
+      setLoadingProgress(72);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      // 虫洞只等待足以覆盖转场前半段的连续缓冲，剩余内容继续由浏览器缓存；
+      // 避免恢复到原先必须等待整段视频的漫长加载。
+      setupWormholeVideo();
+      await waitForVideoBuffer(dom.wormholeVideo, {
+        minimumSeconds: 2.2,
+        timeout: 6200,
+        progressStart: 72,
+        progressEnd: 94
+      });
+      deferredExperienceReady = true;
+      deferredExperiencePromise = Promise.resolve();
+      document.documentElement.dataset.mobileExperienceReady = 'true';
+
       bindEvents();
       onResize();
       state = 'intro';
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const minimumLoaderDuration = 1800;
+      const remainingLoaderTime = Math.max(0, minimumLoaderDuration - (performance.now() - mobileBootStartedAt));
+      if (remainingLoaderTime > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingLoaderTime));
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       setLoadingProgress(100);
       dom.loading.classList.add('is-hidden');
+      document.documentElement.dataset.mobileBootDuration = String(Math.round(performance.now() - mobileBootStartedAt));
       requestAnimationFrame(animate);
-
-      const prepare = () => prepareDeferredMobileExperience().catch(() => {});
-      if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(prepare, { timeout: 900 });
-      } else {
-        window.setTimeout(prepare, 180);
-      }
       return;
     }
 
