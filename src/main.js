@@ -12,7 +12,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import './styles.css';
 import './pluginStyles.css';
-import { categories, photoAlbums, videoItems, resolveAutomationVideo } from './data.js';
+import { categories, photoAlbums, videoItems, resolveAutomationVideo, resolveProductVideo } from './data.js';
 import { librarySpaceVertex, librarySpaceFragment } from './shaders/librarySpace.js';
 import { astronautVertex, astronautFragment } from './shaders/astronaut.js';
 
@@ -57,6 +57,7 @@ let spaceRenderResumeAt = 0;
 let activeCategory = null;
 let activePhotoAlbum = null;
 let activePlugin = null;
+let activeProduct = null;
 let activeVideoGallery = false;
 let activeVideoItem = null;
 let videoLightbox = null;
@@ -1632,9 +1633,10 @@ async function initSpace() {
 
   await createAstronaut();
 
-  createPortal('plugin', new THREE.Vector3(-5.3, -0.15, -10), 0.17);
-  createPortal('photo', new THREE.Vector3(0, 0.45, -14), 0.51);
-  createPortal('video', new THREE.Vector3(5.3, -0.15, -10), 0.83);
+  createPortal('plugin', new THREE.Vector3(-6.4, -0.15, -9.8), 0.17);
+  createPortal('photo', new THREE.Vector3(-2.15, 0.45, -13.8), 0.39);
+  createPortal('video', new THREE.Vector3(2.15, 0.45, -13.8), 0.67);
+  createPortal('product', new THREE.Vector3(6.4, -0.15, -9.8), 0.91);
 
   spaceComposer = new EffectComposer(spaceRenderer);
   spaceComposer.addPass(new RenderPass(spaceScene, spaceCamera));
@@ -1796,6 +1798,7 @@ function startTravelTimeline({ wormholeAlreadyPlaying = false } = {}) {
 
 function beginTravel() {
   if (state !== 'intro') return;
+  document.body.classList.add('is-ship-launching');
   // 用户很快点击时，留在已经显示的高清黑洞画面中等待后台资源就绪，
   // 而不是用未解码的虫洞视频直接开始转场并造成中途卡顿。
   if (isSmallScreen && !deferredExperienceReady) {
@@ -1810,6 +1813,7 @@ function beginTravel() {
         dom.enter.disabled = false;
         dom.enter.removeAttribute('aria-busy');
         if (state === 'intro' && deferredExperienceReady) beginTravel();
+        else if (state === 'intro') document.body.classList.remove('is-ship-launching');
       });
     return;
   }
@@ -1834,6 +1838,7 @@ function beginTravel() {
     if (state !== 'intro') return;
     if (!started) {
       dom.enter.disabled = false;
+      document.body.classList.remove('is-ship-launching');
       return;
     }
     requestAnimationFrame(() => startTravelTimeline({ wormholeAlreadyPlaying: true }));
@@ -1854,6 +1859,7 @@ function finishTravel() {
   document.documentElement.style.setProperty('--space-entry-opacity', '1');
   document.documentElement.style.setProperty('--warp-intensity', '0');
   document.documentElement.style.setProperty('--warp-canvas-opacity', '0');
+  document.body.classList.remove('is-ship-launching');
   dom.introVideo.pause();
   if (dom.wormholeVideo) {
     dom.wormholeVideo.pause();
@@ -1887,6 +1893,7 @@ function updateTravel(now) {
   document.documentElement.style.setProperty('--travel-progress', raw.toFixed(4));
 
   // 0-1 秒：沿首页黑洞视频推进；1-3 秒：高清虫洞视频接管；最后淡入五维空间。
+  // 保留虫洞视频开头完整的近距离黑洞镜头，不再让它在隐藏状态下被跳过。
   const wormholeFadeIn = smoothstep(0.1, 0.26, raw);
   const wormholeFadeOut = 1 - smoothstep(0.8, 0.97, raw);
   const wormholeOpacity = wormholeFadeIn * wormholeFadeOut;
@@ -1918,12 +1925,14 @@ function openCategory(key) {
   stopBlinking();
   dom.panelTitle.textContent = category.title;
   dom.panelDescription.textContent = category.description;
-  document.body.classList.toggle('has-photo-panel', key === 'photo' || key === 'video');
+  document.body.classList.toggle('has-photo-panel', key === 'photo' || key === 'video' || key === 'product');
   document.body.classList.toggle('has-plugin-panel', key === 'plugin');
+  document.body.classList.toggle('has-product-panel', key === 'product');
   document.body.classList.remove('has-photo-album', 'has-video-gallery', 'has-video-player');
   document.body.classList.remove('has-plugin-detail');
   activePhotoAlbum = null;
   activePlugin = null;
+  activeProduct = null;
   activeVideoGallery = false;
   activeVideoItem = null;
 
@@ -1933,6 +1942,8 @@ function openCategory(key) {
     renderPluginGrid();
   } else if (key === 'video') {
     renderVideoGallery();
+  } else if (key === 'product') {
+    renderProductFolders();
   } else {
     dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
     replaceWorkList(...category.works.map((work) => {
@@ -1970,7 +1981,6 @@ function openCategory(key) {
 
 function renderPluginGrid() {
   const pluginOrder = [
-    'evehut-ai-wardrobe',
     'evaluation-radar',
     'video-description',
     'vision-annotation',
@@ -2055,12 +2065,13 @@ function renderPluginGrid() {
   replaceWorkList(grid);
 }
 
-function openPluginDetail(pluginId) {
-  const plugin = categories.plugin.works.find((item) => item.id === pluginId);
-  if (!plugin || activeCategory !== 'plugin') return;
-  activePlugin = pluginId;
+function openWorkDetail(categoryKey, workId) {
+  const plugin = categories[categoryKey]?.works.find((item) => item.id === workId);
+  if (!plugin || activeCategory !== categoryKey) return;
+  if (categoryKey === 'plugin') activePlugin = workId;
+  if (categoryKey === 'product') activeProduct = workId;
   document.body.classList.add('has-plugin-detail');
-  dom.closePanel.innerHTML = '<span>‹</span> 返回自动化';
+  dom.closePanel.innerHTML = `<span>‹</span> 返回${categoryKey === 'product' ? '产品' : '自动化'}`;
   dom.panelTitle.textContent = plugin.shortTitle;
   dom.panelDescription.textContent = plugin.tagline;
   dom.workList.className = 'work-list plugin-detail-view';
@@ -2077,6 +2088,15 @@ function openPluginDetail(pluginId) {
     <h3>${plugin.title}</h3>
     <strong>${plugin.tagline}</strong>
   `;
+  if (plugin.logo) {
+    const orbit = identity.querySelector('.plugin-detail-orbit');
+    const logo = document.createElement('img');
+    logo.className = 'plugin-detail-logo';
+    logo.src = plugin.logo;
+    logo.alt = '';
+    logo.decoding = 'async';
+    orbit.replaceChildren(logo);
+  }
   if (plugin.website) {
     const liveLink = document.createElement('a');
     liveLink.className = 'plugin-live-link';
@@ -2101,8 +2121,23 @@ function openPluginDetail(pluginId) {
     visual.append(image);
   }
   const caption = document.createElement('figcaption');
-  caption.textContent = '界面截图 / Chrome 扩展与本地工作台';
+  caption.textContent = categoryKey === 'product'
+    ? '产品主视觉 / EveHut AI 智能衣橱'
+    : '界面截图 / Chrome 扩展与本地工作台';
   visual.append(caption);
+
+  const productGallery = document.createElement('div');
+  productGallery.className = 'product-detail-gallery';
+  (plugin.gallery || []).forEach((item) => {
+    const figure = document.createElement('figure');
+    const image = document.createElement('img');
+    image.src = item.src;
+    image.alt = item.alt;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    figure.append(image);
+    productGallery.append(figure);
+  });
 
   const introduction = document.createElement('section');
   introduction.innerHTML = `<small>01 / PRODUCT</small><h4>它是什么</h4><p>${plugin.what}</p>`;
@@ -2137,7 +2172,9 @@ function openPluginDetail(pluginId) {
   });
   usage.append(usageLabel, usageTitle, steps);
 
-  content.append(visual, introduction, problem, featureSection, usage);
+  content.append(visual);
+  if (plugin.gallery?.length) content.append(productGallery);
+  content.append(introduction, problem, featureSection, usage);
 
   if (plugin.knowledgeBase) {
     const knowledgeSection = document.createElement('section');
@@ -2191,7 +2228,9 @@ function openPluginDetail(pluginId) {
         loader.disabled = true;
         loader.innerHTML = '<span>加载中…</span><small>正在读取演示视频</small>';
         try {
-          const url = await resolveAutomationVideo(item.path);
+          const url = categoryKey === 'product'
+            ? await resolveProductVideo(item.path)
+            : await resolveAutomationVideo(item.path);
           video.src = url;
           video.load();
           frame.classList.add('is-ready');
@@ -2219,14 +2258,66 @@ function openPluginDetail(pluginId) {
   dom.panel.scrollTo({ top: 0, behavior: 'auto' });
 }
 
-function closePluginDetail() {
-  if (!activePlugin) return false;
+function openPluginDetail(pluginId) {
+  openWorkDetail('plugin', pluginId);
+}
+
+function openProductDetail(productId) {
+  openWorkDetail('product', productId);
+}
+
+function closeWorkDetail() {
+  if (!activePlugin && !activeProduct) return false;
+  const returningToProduct = Boolean(activeProduct);
   activePlugin = null;
+  activeProduct = null;
   document.body.classList.remove('has-plugin-detail');
-  dom.panelTitle.textContent = categories.plugin.title;
-  dom.panelDescription.textContent = categories.plugin.description;
-  renderPluginGrid();
+  const category = returningToProduct ? categories.product : categories.plugin;
+  dom.panelTitle.textContent = category.title;
+  dom.panelDescription.textContent = category.description;
+  if (returningToProduct) renderProductFolders();
+  else renderPluginGrid();
   return true;
+}
+
+function renderProductFolders() {
+  dom.closePanel.innerHTML = '<span>×</span> 返回五维空间';
+  const grid = document.createElement('section');
+  grid.className = 'photo-folder-grid product-folder-grid';
+  grid.setAttribute('aria-label', '产品列表');
+
+  categories.product.works.forEach((product, productIndex) => {
+    const button = document.createElement('button');
+    button.className = 'photo-folder product-folder';
+    button.type = 'button';
+    button.style.setProperty('--album-index', productIndex);
+    button.style.setProperty('--product-accent', product.accent);
+    button.setAttribute('aria-label', `打开${product.shortTitle}产品详情`);
+
+    const stack = document.createElement('span');
+    stack.className = 'photo-folder-stack product-folder-stack';
+    product.covers.forEach((src, coverOrder) => {
+      const image = document.createElement('img');
+      image.src = src;
+      image.alt = '';
+      image.loading = coverOrder === 0 ? 'eager' : 'lazy';
+      image.decoding = 'async';
+      image.style.setProperty('--cover-order', coverOrder);
+      stack.append(image);
+    });
+
+    const copy = document.createElement('span');
+    copy.className = 'photo-folder-copy';
+    copy.innerHTML = `<small>${product.type} · V ${product.version}</small><strong>${product.shortTitle}</strong><span>${product.tagline}</span>`;
+    const arrow = document.createElement('i');
+    arrow.setAttribute('aria-hidden', 'true');
+    button.append(stack, copy, arrow);
+    button.addEventListener('click', () => openProductDetail(product.id));
+    grid.append(button);
+  });
+
+  dom.workList.className = 'work-list photo-folders product-folders';
+  replaceWorkList(grid);
 }
 
 function renderPhotoFolders() {
@@ -2642,7 +2733,7 @@ function closeVideoPlayer() {
 function closeCategory() {
   if (closeVideoPlayer()) return;
   if (closePhotoAlbum()) return;
-  if (closePluginDetail()) return;
+  if (closeWorkDetail()) return;
   if (!activeCategory) return;
   if (astronautPanelTimer) {
     window.clearTimeout(astronautPanelTimer);
@@ -2653,7 +2744,7 @@ function closeCategory() {
   cameraTarget.set(0, 0, 15 + scrollDepth);
   lookTarget.set(0, 0, -18);
   document.body.classList.remove('has-panel');
-  document.body.classList.remove('has-photo-panel', 'has-photo-album', 'has-video-gallery', 'has-video-player', 'has-plugin-panel', 'has-plugin-detail');
+  document.body.classList.remove('has-photo-panel', 'has-photo-album', 'has-video-gallery', 'has-video-player', 'has-plugin-panel', 'has-product-panel', 'has-plugin-detail');
   document.body.classList.remove('is-mobile-media-preparing');
   window.clearTimeout(mobileMediaPreparationTimer);
   mobileMediaPreparationTimer = 0;

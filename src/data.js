@@ -21,6 +21,17 @@ const automationVideoAssetLoaders = import.meta.glob('./assets/automation/videos
   import: 'default'
 });
 
+const productImageAssetUrls = import.meta.glob('./assets/product/**/*.{jpg,png,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const productVideoAssetLoaders = import.meta.glob('./assets/product/**/*.mp4', {
+  query: '?url',
+  import: 'default'
+});
+
 const resolveAsset = (catalog, path) => {
   const url = catalog[path];
   if (!url) throw new Error(`Missing protected asset: ${path}`);
@@ -28,6 +39,7 @@ const resolveAsset = (catalog, path) => {
 };
 
 const automationAsset = (path) => resolveAsset(automationImageAssetUrls, `./assets/automation/${path}`);
+const productAsset = (path) => resolveAsset(productImageAssetUrls, `./assets/product/${path}`);
 
 export const resolveAutomationVideo = async (path) => {
   const loader = automationVideoAssetLoaders[`./assets/automation/${path}`];
@@ -35,35 +47,20 @@ export const resolveAutomationVideo = async (path) => {
   return loader();
 };
 
+export const resolveProductVideo = async (path) => {
+  const loader = productVideoAssetLoaders[`./assets/product/${path}`];
+  if (!loader) throw new Error(`Missing product video: ${path}`);
+  return loader();
+};
+
 export const categories = {
   plugin: {
-    index: '01 / 03',
+    index: '01 / 04',
     kicker: 'AUTOMATION SYSTEMS',
     title: '自动化',
     description: '围绕 Chrome 扩展与本地浏览器工具，把采集、下载、标注、分镜、评测这些重复动作整理成稳定、可视化、可导出的自动化工作流。',
     accent: '#ffd49a',
     works: [
-      {
-        id: 'evehut-ai-wardrobe',
-        code: '衣',
-        version: '1.0.0',
-        title: '伊屋 EveHut · AI 智能衣橱',
-        shortTitle: '伊屋 EveHut',
-        tagline: '从穿搭困扰出发，完成产品定义、知识库、AI 能力、社区与线上部署的一体化智能衣橱。',
-        type: 'AI FASHION PRODUCT',
-        accent: '#d8e8f5',
-        preview: automationAsset('screens/evehut-portfolio.png'),
-        website: 'https://evehut77-d4gpnufz05c1e9ec4-1455866191.ap-shanghai.app.tcloudbase.com/',
-        what: '一款面向日常穿搭决策的响应式 AI 产品。我独立完成产品规划、视觉设计、前后端开发、AI 服务适配和线上部署，让用户能够管理自己的数字衣橱、获得搭配建议，并通过图片或实时画面评价一套穿搭。',
-        problem: '普通用户常常不是“没有衣服”，而是不清楚已有单品的风格、适用场景和组合逻辑。单纯调用通用大模型也容易给出空泛建议，因此产品需要同时具备个人衣橱数据、稳定评分规则和可检索的专业穿搭知识。',
-        result: '完成了可公开访问的产品版本：支持邮箱免验证码注册、衣物识别、智能搭配、十维穿搭评价、多模型 API 配置，以及“小区”、好友和消息等社区能力；数据与图片部署在腾讯云 CloudBase。',
-        features: ['数字衣橱与衣物识别', '十维穿搭评分体系', '实时摄像头穿搭评价', 'Kimi / 千问 / DeepSeek / Claude 等多模型适配', 'Obsidian 本地穿搭知识库', '56 类风格多维标签体系', '小区 / 好友 / 消息', '邮箱账户与腾讯云部署'],
-        knowledgeBase: {
-          summary: '我使用 Obsidian 搭建了本地穿搭知识库，把零散的风格图片与判断经验整理成可维护、可追溯的规则资产，再让 App 在识别和评价时检索这些规则，而不是只依赖模型的临时判断。',
-          facts: ['以 9 张风格规则图作为定义基础', '整理 56 类常见服装风格及其颜色、廓形、材质、图案和场景证据', '对穿搭摄影图片建立多维标签与案例档案', '将规则库、案例库与独立评测集分开，避免评测结果失真', '支持后续持续补充图片、人工修正标签和更新评分规则']
-        },
-        steps: ['从真实穿搭困扰出发，梳理数字衣橱、智能搭配、穿搭评价与社区互动的产品流程。', '在 Obsidian 中建立本地知识库，制定多维风格分类规则，并对穿搭图片进行风格定义与标签化。', '设计十维评分体系和尊重性评价边界，让系统评价衣服与搭配效果，而不是评价人的价值。', '完成响应式前端、账户体系、图片存储、社区关系和多家 AI API 的服务端适配。', '迁移到腾讯云 CloudBase，在中国大陆可访问的环境中完成注册、登录、图片上传和社区链路验收。', '建立 35 项自动化测试，覆盖知识库规则、AI 输出结构、隐私删除、移动端布局与关键产品流程。']
-      },
       {
         id: 'blobstore-key',
         code: '🔑',
@@ -187,8 +184,45 @@ export const categories = {
       }
     ]
   },
+  product: {
+    index: '04 / 04',
+    kicker: 'PRODUCTS BUILT WITH INTENT',
+    title: '产品',
+    description: '从问题定义、产品设计到开发与上线，这里展示我独立构建的完整数字产品。',
+    accent: '#d8e8f5',
+    works: [
+      {
+        id: 'evehut-ai-wardrobe',
+        code: '衣',
+        version: '1.0.0',
+        title: '伊屋 EveHut · AI 智能衣橱',
+        shortTitle: '伊屋 EveHut',
+        tagline: '衣橱更懂你，每天更像自己',
+        type: 'AI FASHION PRODUCT',
+        accent: '#d8e8f5',
+        preview: productAsset('evehut/hero.png'),
+        logo: productAsset('evehut/logo.jpg'),
+        covers: [productAsset('evehut/hero.png')],
+        gallery: [
+          { src: productAsset('evehut/overview.png'), alt: '伊屋 EveHut 产品作品集概览' },
+          { src: productAsset('evehut/knowledge.png'), alt: '伊屋 EveHut 本地穿搭知识库' }
+        ],
+        videos: [{ label: '伊屋 EveHut 产品演示', path: 'evehut/demo.mp4' }],
+        website: 'https://evehut77-d4gpnufz05c1e9ec4-1455866191.ap-shanghai.app.tcloudbase.com/',
+        what: '一款面向日常穿搭决策的响应式 AI 产品。我独立完成产品规划、视觉设计、前后端开发、AI 服务适配和线上部署，让用户能够管理自己的数字衣橱、获得搭配建议，并通过图片或实时画面评价一套穿搭。',
+        problem: '普通用户常常不是“没有衣服”，而是不清楚已有单品的风格、适用场景和组合逻辑。单纯调用通用大模型也容易给出空泛建议，因此产品需要同时具备个人衣橱数据、稳定评分规则和可检索的专业穿搭知识。',
+        result: '完成可公开访问的产品版本：支持邮箱注册、衣物识别、智能搭配、十维穿搭评价、多模型 API 配置，以及“小区”、好友和消息等社区能力。',
+        features: ['数字衣橱与衣物识别', '十维穿搭评分体系', '实时摄像头穿搭评价', 'Kimi / 千问 / DeepSeek / Claude 等多模型适配', 'Obsidian 本地穿搭知识库', '56 类风格多维标签体系', '小区 / 好友 / 消息', '邮箱账户与腾讯云部署'],
+        knowledgeBase: {
+          summary: '我使用 Obsidian 搭建了本地穿搭知识库，把零散的风格图片与判断经验整理成可维护、可追溯的规则资产，再让产品在识别和评价时检索这些规则。',
+          facts: ['以 9 张风格规则图作为定义基础', '整理 56 类常见服装风格及其颜色、廓形、材质、图案和场景证据', '对穿搭摄影图片建立多维标签与案例档案', '将规则库、案例库与独立评测集分开', '支持后续补充图片、人工修正标签和更新评分规则']
+        },
+        steps: ['从真实穿搭困扰出发，梳理数字衣橱、智能搭配、穿搭评价与社区互动的产品流程。', '在 Obsidian 中建立本地知识库，制定多维风格分类规则。', '设计十维评分体系和尊重性评价边界，让系统评价衣服与搭配效果。', '完成响应式前端、账户体系、图片存储、社区关系和多家 AI API 的服务端适配。', '迁移到腾讯云 CloudBase，完成注册、登录、图片上传和社区链路验收。', '建立 35 项自动化测试，覆盖知识库规则、AI 输出结构、隐私删除、移动端布局与关键产品流程。']
+      }
+    ]
+  },
   photo: {
-    index: '02 / 03',
+    index: '02 / 04',
     kicker: 'LIGHT BECOMES MEMORY',
     title: '摄影作品',
     description: '摄影是我与时间相处的方式。光线只经过一次，而快门把那一瞬变成可以重新抵达的坐标。',
@@ -200,7 +234,7 @@ export const categories = {
     ]
   },
   video: {
-    index: '03 / 03',
+    index: '03 / 04',
     kicker: 'TIME FINDS ANOTHER VOICE',
     title: '视频作品',
     description: '影像让空间开始呼吸，也让时间拥有剪辑之外的回声。这里保存短片、动态实验与尚未结束的叙事。',
