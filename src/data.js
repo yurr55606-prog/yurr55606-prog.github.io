@@ -203,10 +203,6 @@ export const categories = {
         preview: productAsset('evehut/hero.png'),
         logo: productAsset('evehut/logo.jpg'),
         covers: [productAsset('evehut/hero.png')],
-        gallery: [
-          { src: productAsset('evehut/overview.png'), alt: '伊屋 EveHut 产品作品集概览' },
-          { src: productAsset('evehut/knowledge.png'), alt: '伊屋 EveHut 本地穿搭知识库' }
-        ],
         videos: [{ label: '伊屋 EveHut 产品演示', path: 'evehut/demo.mp4' }],
         website: 'https://evehut77-d4gpnufz05c1e9ec4-1455866191.ap-shanghai.app.tcloudbase.com/',
         what: '一款面向日常穿搭决策的响应式 AI 产品。我独立完成产品规划、视觉设计、前后端开发、AI 服务适配和线上部署，让用户能够管理自己的数字衣橱、获得搭配建议，并通过图片或实时画面评价一套穿搭。',
