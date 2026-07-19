@@ -1970,6 +1970,7 @@ function openCategory(key) {
 
 function renderPluginGrid() {
   const pluginOrder = [
+    'evehut-ai-wardrobe',
     'evaluation-radar',
     'video-description',
     'vision-annotation',
@@ -2076,6 +2077,15 @@ function openPluginDetail(pluginId) {
     <h3>${plugin.title}</h3>
     <strong>${plugin.tagline}</strong>
   `;
+  if (plugin.website) {
+    const liveLink = document.createElement('a');
+    liveLink.className = 'plugin-live-link';
+    liveLink.href = plugin.website;
+    liveLink.target = '_blank';
+    liveLink.rel = 'noopener noreferrer';
+    liveLink.innerHTML = '<span>访问线上产品</span><i aria-hidden="true">↗</i>';
+    identity.append(liveLink);
+  }
 
   const content = document.createElement('div');
   content.className = 'plugin-detail-content';
@@ -2129,11 +2139,33 @@ function openPluginDetail(pluginId) {
 
   content.append(visual, introduction, problem, featureSection, usage);
 
+  if (plugin.knowledgeBase) {
+    const knowledgeSection = document.createElement('section');
+    knowledgeSection.className = 'plugin-knowledge-section';
+    const knowledgeLabel = document.createElement('small');
+    knowledgeLabel.textContent = '05 / KNOWLEDGE';
+    const knowledgeTitle = document.createElement('h4');
+    knowledgeTitle.textContent = 'Obsidian 本地知识库';
+    const knowledgeContent = document.createElement('div');
+    knowledgeContent.className = 'plugin-knowledge-content';
+    const knowledgeSummary = document.createElement('p');
+    knowledgeSummary.textContent = plugin.knowledgeBase.summary;
+    const knowledgeFacts = document.createElement('ul');
+    plugin.knowledgeBase.facts.forEach((fact) => {
+      const item = document.createElement('li');
+      item.textContent = fact;
+      knowledgeFacts.append(item);
+    });
+    knowledgeContent.append(knowledgeSummary, knowledgeFacts);
+    knowledgeSection.append(knowledgeLabel, knowledgeTitle, knowledgeContent);
+    content.append(knowledgeSection);
+  }
+
   if (plugin.videos?.length) {
     const videoSection = document.createElement('section');
     videoSection.className = 'plugin-video-section';
     const videoLabel = document.createElement('small');
-    videoLabel.textContent = '05 / DEMO';
+    videoLabel.textContent = plugin.knowledgeBase ? '06 / DEMO' : '05 / DEMO';
     const videoTitle = document.createElement('h4');
     videoTitle.textContent = '演示视频';
     const videoGrid = document.createElement('div');
