@@ -308,6 +308,14 @@ export function createFirstPersonExperience(canvas, options = {}) {
   let startedAt = 0;
   let resolvePhase = null;
   let lastRenderAt = 0;
+  let playbackToken = 0;
+  let firstFrameTimer = 0;
+  let warmupScheduled = false;
+
+  const clearFirstFrameTimer = () => {
+    window.clearTimeout(firstFrameTimer);
+    firstFrameTimer = 0;
+  };
 
   const setProp = (nextSection) => {
     interactionVideo.pause();
@@ -317,9 +325,15 @@ export function createFirstPersonExperience(canvas, options = {}) {
     activeVideoConfig = SECTION_VIDEOS[nextSection] || null;
     if (!activeVideoConfig) return;
 
-    if (interactionVideo.dataset.section !== nextSection) {
+    const isNewSource = interactionVideo.dataset.section !== nextSection;
+    if (isNewSource) {
       interactionVideo.dataset.section = nextSection;
       interactionVideo.src = activeVideoConfig.url;
+      interactionVideo.load();
+    } else if (interactionVideo.currentTime > 0.05) {
+      // Reopening the same section must also flush the frozen hero frame.
+      // The source is already cached, so load() is inexpensive but prevents
+      // a stale frame from reaching the GPU before the rewind completes.
       interactionVideo.load();
     }
     interactionVideo.playbackRate = 1.4;
@@ -332,14 +346,54 @@ export function createFirstPersonExperience(canvas, options = {}) {
     interactionVideoMaterial.uniforms.uSaturation.value = activeVideoConfig.saturation;
     interactionVideoMaterial.uniforms.uWarm.value = activeVideoConfig.warm;
     interactionVideoMaterial.uniforms.uCool.value = activeVideoConfig.cool;
-    interactionVideoPlane.visible = true;
   };
   const open = (nextSection) => {
     if (phase !== 'idle') return Promise.reject(new Error('First-person experience is busy'));
-    setProp(nextSection); phase = 'opening'; startedAt = performance.now(); canvas.dataset.visible = 'true';
+    const token = ++playbackToken;
+    setProp(nextSection);
+    phase = 'preparing';
+    startedAt = performance.now();
+    canvas.dataset.visible = 'false';
+
+    const showFirstDecodedFrame = () => {
+      if (token !== playbackToken || phase !== 'preparing') return;
+      clearFirstFrameTimer();
+      interactionVideoPlane.visible = true;
+      interactionVideoMaterial.uniforms.uOpacity.value = 0;
+      canvas.dataset.visible = 'true';
+      phase = 'opening';
+      startedAt = performance.now();
+      options.onPlaybackReady?.(nextSection);
+    };
+    const continueWithoutVideo = (error) => {
+      if (token !== playbackToken || phase !== 'preparing') return;
+      clearFirstFrameTimer();
+      console.warn('第一人称道具视频未及时就绪，已使用无黑屏直接展开兜底。', error);
+      interactionVideo.pause();
+      interactionVideoPlane.visible = false;
+      canvas.dataset.visible = 'false';
+      phase = 'holding';
+      resolvePhase?.();
+      resolvePhase = null;
+    };
+
     try { interactionVideo.currentTime = 0.001; } catch {}
-    interactionVideo.play().catch((error) => console.warn('第一人称道具视频播放失败，将使用直接展开兜底。', error));
-    return new Promise((resolve) => { resolvePhase = resolve; });
+    const completion = new Promise((resolve) => { resolvePhase = resolve; });
+    if ('requestVideoFrameCallback' in interactionVideo) {
+      interactionVideo.requestVideoFrameCallback(showFirstDecodedFrame);
+    } else {
+      interactionVideo.addEventListener('loadeddata', () => requestAnimationFrame(showFirstDecodedFrame), { once: true });
+    }
+    interactionVideo.play().then(() => {
+      if (!('requestVideoFrameCallback' in interactionVideo) && interactionVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        requestAnimationFrame(showFirstDecodedFrame);
+      }
+    }).catch(continueWithoutVideo);
+    firstFrameTimer = window.setTimeout(
+      () => continueWithoutVideo(new Error('first frame timeout')),
+      compact ? 5200 : 4200
+    );
+    return completion;
   };
   const close = () => {
     if (phase !== 'holding') return Promise.resolve();
@@ -348,6 +402,7 @@ export function createFirstPersonExperience(canvas, options = {}) {
   };
   const update = (now) => {
     if (phase === 'idle') { renderer.clear(); return; }
+    if (phase === 'preparing') { renderer.clear(); return; }
     const closingDuration = compact ? 760 : 980;
     const elapsed = now - startedAt;
     if (phase === 'opening') {
@@ -367,6 +422,8 @@ export function createFirstPersonExperience(canvas, options = {}) {
       interactionVideoMaterial.uniforms.uOpacity.value = 1 - closeProgress;
       if (elapsed >= closingDuration) {
         phase = 'idle';
+        playbackToken += 1;
+        clearFirstFrameTimer();
         interactionVideo.pause();
         interactionVideoPlane.visible = false;
         interactionVideoMaterial.uniforms.uOpacity.value = 0;
@@ -393,6 +450,26 @@ export function createFirstPersonExperience(canvas, options = {}) {
     interactionVideo.preload = 'auto';
     interactionVideo.load();
   };
-  return { open, close, update, resize, preload,
+  const warmup = () => {
+    if (warmupScheduled || navigator.connection?.saveData) return;
+    warmupScheduled = true;
+    const order = ['plugin', 'photo', 'video', 'product'];
+    order.forEach((key, index) => {
+      window.setTimeout(() => {
+        const schedulePrefetch = () => {
+          if (document.head.querySelector(`link[data-first-person-prefetch="${key}"]`)) return;
+          const link = document.createElement('link');
+          link.rel = 'prefetch';
+          link.as = 'video';
+          link.href = SECTION_VIDEOS[key].url;
+          link.dataset.firstPersonPrefetch = key;
+          document.head.append(link);
+        };
+        if ('requestIdleCallback' in window) window.requestIdleCallback(schedulePrefetch, { timeout: 1600 });
+        else schedulePrefetch();
+      }, index * (compact ? 1100 : 520));
+    });
+  };
+  return { open, close, update, resize, preload, warmup,
     get phase() { return phase; }, get activeSection() { return section; } };
 }

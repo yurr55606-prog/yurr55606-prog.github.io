@@ -1661,7 +1661,13 @@ async function initSpace() {
   updateSpace(0, 1 / 60);
   firstPersonExperience = createFirstPersonExperience(dom.firstPersonCanvas, {
     isSmallScreen,
-    reducedMotion
+    reducedMotion,
+    onPlaybackReady: (key) => {
+      if (pendingCategory !== key || state !== 'space') return;
+      document.body.classList.add('is-character-exiting', 'is-first-person-transition');
+      document.body.classList.remove('is-first-person-closing');
+      if (dom.experienceStatus) dom.experienceStatus.textContent = `正在举起${categories[key]?.title || '作品'}交互装置`;
+    }
   });
 }
 
@@ -1883,6 +1889,7 @@ function finishTravel() {
   dom.spaceCanvas.style.opacity = '';
   dom.spaceCanvas.style.clipPath = '';
   dom.spaceUi.setAttribute('aria-hidden', 'false');
+  firstPersonExperience?.warmup();
   setArrivalPhase('space-complete');
   // 手机完成转场后不再保留两套高分辨率视频解码器，给摄影与影像页面腾出内存。
   if (isSmallScreen) window.setTimeout(releaseCompletedTravelMedia, 420);
@@ -1930,9 +1937,8 @@ async function openCategory(key) {
   experienceBusy = true;
   pendingCategory = key;
   stopBlinking();
-  document.body.classList.add('is-character-exiting', 'is-first-person-transition');
   document.body.classList.remove('is-first-person-closing');
-  if (dom.experienceStatus) dom.experienceStatus.textContent = `正在举起${category.title}交互装置`;
+  if (dom.experienceStatus) dom.experienceStatus.textContent = `正在准备${category.title}交互装置`;
 
   try {
     await firstPersonExperience?.open(key);
@@ -1945,7 +1951,7 @@ async function openCategory(key) {
     if (dom.experienceStatus) dom.experienceStatus.textContent = `${category.title}已打开`;
   } catch (error) {
     console.warn('第一人称交互已切换为直接打开：', error);
-    document.body.classList.remove('is-first-person-transition');
+    document.body.classList.remove('is-character-exiting', 'is-first-person-transition');
     commitOpenCategory(key);
   } finally {
     experienceBusy = false;
