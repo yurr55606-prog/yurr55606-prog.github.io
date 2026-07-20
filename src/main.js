@@ -15,6 +15,7 @@ import './pluginStyles.css';
 import { categories, photoAlbums, videoItems, resolveAutomationVideo, resolveProductVideo } from './data.js';
 import { librarySpaceVertex, librarySpaceFragment } from './shaders/librarySpace.js';
 import { astronautVertex, astronautFragment } from './shaders/astronaut.js';
+import { createFirstPersonExperience } from './firstPersonExperience.js';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmallScreen = window.matchMedia('(max-width: 720px)').matches;
@@ -35,6 +36,8 @@ const dom = {
   warpCanvas: document.querySelector('#warp-canvas'),
   spaceCanvas: document.querySelector('#space-canvas'),
   astronautCanvas: document.querySelector('#astronaut-canvas'),
+  firstPersonCanvas: document.querySelector('#first-person-canvas'),
+  experienceStatus: document.querySelector('#experience-status'),
   intro: document.querySelector('#intro'),
   enter: document.querySelector('#enter'),
   spaceUi: document.querySelector('#space-ui'),
@@ -85,6 +88,10 @@ let mobileWormholeStartPromise = null;
 let mobileWormholeGestureTimer = 0;
 let panelMediaObservers = [];
 let mobileMediaPreparationTimer = 0;
+let firstPersonExperience = null;
+let experienceBusy = false;
+let pendingCategory = null;
+let spaceFrozen = false;
 
 function setLoadingProgress(value) {
   if (!dom.loadingProgress) return;
@@ -1652,6 +1659,10 @@ async function initSpace() {
   spaceComposer.addPass(new OutputPass());
   spaceRenderer.compile(spaceScene, spaceCamera);
   updateSpace(0, 1 / 60);
+  firstPersonExperience = createFirstPersonExperience(dom.firstPersonCanvas, {
+    isSmallScreen,
+    reducedMotion
+  });
 }
 
 function updateSpace(time, delta) {
@@ -1911,7 +1922,38 @@ function updateTravel(now) {
   if (raw >= 1) finishTravel();
 }
 
-function openCategory(key) {
+async function openCategory(key) {
+  const category = categories[key];
+  const portal = portals.find((item) => item.userData.category === key);
+  if (!category || !portal || state !== 'space' || !astronautVisible || activeCategory || experienceBusy) return;
+
+  experienceBusy = true;
+  pendingCategory = key;
+  stopBlinking();
+  document.body.classList.add('is-character-exiting', 'is-first-person-transition');
+  document.body.classList.remove('is-first-person-closing');
+  if (dom.experienceStatus) dom.experienceStatus.textContent = `正在举起${category.title}交互装置`;
+
+  try {
+    await firstPersonExperience?.open(key);
+    if (pendingCategory !== key || state !== 'space') return;
+    spaceFrozen = true;
+    document.body.classList.remove('is-first-person-transition');
+    document.body.classList.add('is-first-person-mode', 'is-first-person-revealing');
+    commitOpenCategory(key);
+    window.setTimeout(() => document.body.classList.remove('is-first-person-revealing'), reducedMotion ? 120 : 920);
+    if (dom.experienceStatus) dom.experienceStatus.textContent = `${category.title}已打开`;
+  } catch (error) {
+    console.warn('第一人称交互已切换为直接打开：', error);
+    document.body.classList.remove('is-first-person-transition');
+    commitOpenCategory(key);
+  } finally {
+    experienceBusy = false;
+    pendingCategory = null;
+  }
+}
+
+function commitOpenCategory(key) {
   const category = categories[key];
   const portal = portals.find((item) => item.userData.category === key);
   if (!category || !portal || state !== 'space' || !astronautVisible) return;
@@ -1971,6 +2013,7 @@ function openCategory(key) {
   const moveCameraAfterCharacterExit = () => {
     astronautPanelTimer = 0;
     if (activeCategory !== key) return;
+    if (spaceFrozen) return;
     cameraTarget.set(portal.position.x * 0.55 - 1.8, portal.position.y * 0.5, portal.position.z + 6.8);
     lookTarget.copy(portal.position);
   };
@@ -2734,15 +2777,22 @@ function closeCategory() {
   if (closeVideoPlayer()) return;
   if (closePhotoAlbum()) return;
   if (closeWorkDetail()) return;
-  if (!activeCategory) return;
+  if (!activeCategory || experienceBusy) return;
+  closeRootCategory();
+}
+
+async function closeRootCategory() {
+  if (!activeCategory || experienceBusy) return;
+  experienceBusy = true;
+  const closingCategory = activeCategory;
+  document.body.classList.add('is-first-person-closing');
+  document.body.classList.remove('is-first-person-revealing');
+  if (dom.experienceStatus) dom.experienceStatus.textContent = `正在收起${categories[closingCategory]?.title || '作品'}交互装置`;
   if (astronautPanelTimer) {
     window.clearTimeout(astronautPanelTimer);
     astronautPanelTimer = 0;
   }
-  activeCategory = null;
   activeVideoGallery = false;
-  cameraTarget.set(0, 0, 15 + scrollDepth);
-  lookTarget.set(0, 0, -18);
   document.body.classList.remove('has-panel');
   document.body.classList.remove('has-photo-panel', 'has-photo-album', 'has-video-gallery', 'has-video-player', 'has-plugin-panel', 'has-product-panel', 'has-plugin-detail');
   document.body.classList.remove('is-mobile-media-preparing');
@@ -2750,15 +2800,21 @@ function closeCategory() {
   mobileMediaPreparationTimer = 0;
   disposePanelMedia();
   dom.workList.className = 'work-list';
-  dom.workList.replaceChildren();
   dom.panel.setAttribute('aria-hidden', 'true');
-  const restoreCharacter = () => {
-    astronautPanelTimer = 0;
-    if (state !== 'space' || activeCategory) return;
-    document.body.classList.remove('is-character-exiting');
-  };
-  if (reducedMotion) restoreCharacter();
-  else astronautPanelTimer = window.setTimeout(restoreCharacter, 560);
+  await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 420));
+  dom.workList.replaceChildren();
+  activeCategory = null;
+  try {
+    await firstPersonExperience?.close();
+  } finally {
+    spaceFrozen = false;
+    cameraTarget.set(0, 0, 15 + scrollDepth);
+    lookTarget.set(0, 0, -18);
+    document.body.classList.remove('is-first-person-mode', 'is-first-person-closing', 'is-first-person-transition');
+    if (state === 'space') document.body.classList.remove('is-character-exiting');
+    if (dom.experienceStatus) dom.experienceStatus.textContent = '已返回五维空间';
+    experienceBusy = false;
+  }
   scheduleBlink();
 }
 
@@ -2802,6 +2858,7 @@ function onResize() {
     spaceCamera.aspect = width / height;
     spaceCamera.updateProjectionMatrix();
   }
+  firstPersonExperience?.resize(width, height);
   positionAstronautForViewport();
 }
 
@@ -2823,10 +2880,16 @@ function animate(now) {
       ? 1000 / (videoLightbox ? (isSmallScreen ? 12 : 16) : (isSmallScreen ? 20 : 24))
       : 0;
     if (!panelFrameInterval || now - lastSpaceRenderAt >= panelFrameInterval) {
-      updateSpace(time, delta);
+      if (spaceFrozen) {
+        spaceComposer?.render(delta);
+        astronautRenderer?.clear();
+      } else {
+        updateSpace(time, delta);
+      }
       lastSpaceRenderAt = now;
     }
   }
+  if (state === 'space') firstPersonExperience?.update(now, smoothPointer);
   requestAnimationFrame(animate);
 }
 
@@ -2857,9 +2920,11 @@ function bindEvents() {
       button.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
     });
     button.addEventListener('pointerenter', () => {
+      firstPersonExperience?.preload(button.dataset.category);
       const portal = portals.find((item) => item.userData.category === button.dataset.category);
       if (portal) portal.userData.hovered = true;
     });
+    button.addEventListener('focus', () => firstPersonExperience?.preload(button.dataset.category));
     button.addEventListener('pointerleave', () => {
       button.style.removeProperty('--mx');
       button.style.removeProperty('--my');
