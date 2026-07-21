@@ -1,16 +1,18 @@
-const photoAssetUrls = import.meta.glob('./assets/gallery/*/*.jpg', {
+const photoAssetUrls = import.meta.glob('./assets/gallery/*/*.webp', {
   eager: true,
   query: '?url',
   import: 'default'
 });
 
-const videoAssetUrls = import.meta.glob('./assets/videos/**/*.{mp4,png}', {
+// Only include the current showreel. The retired `video-xx` set duplicated six
+// clips and made every production build roughly 128 MB larger.
+const videoAssetUrls = import.meta.glob('./assets/videos/showreel/**/*.{mp4,webp}', {
   eager: true,
   query: '?url',
   import: 'default'
 });
 
-const automationImageAssetUrls = import.meta.glob('./assets/automation/screens/*.png', {
+const automationImageAssetUrls = import.meta.glob('./assets/automation/screens/*.webp', {
   eager: true,
   query: '?url',
   import: 'default'
@@ -21,7 +23,7 @@ const automationVideoAssetLoaders = import.meta.glob('./assets/automation/videos
   import: 'default'
 });
 
-const productImageAssetUrls = import.meta.glob('./assets/product/**/*.{jpg,png,webp}', {
+const productImageAssetUrls = import.meta.glob('./assets/product/**/*.{jpg,webp}', {
   eager: true,
   query: '?url',
   import: 'default'
@@ -70,7 +72,7 @@ export const categories = {
         tagline: '从当前页面与接口响应中一键抓取 Key，并沉淀成可导出的记事本。',
         type: 'CHROME EXTENSION',
         accent: '#8b5cf6',
-        preview: automationAsset('screens/key-capture.png'),
+        preview: automationAsset('screens/key-capture.webp'),
         what: '一款用于网页数据采集的 Chrome 扩展。它会扫描当前页面、页面源码与已捕获接口响应，把识别到的 Key 自动写入插件侧边栏，并支持手动补充。',
         problem: '过去需要打开开发者工具、搜索接口、复制字段、再粘贴到表格里。这个流程很慢，也容易漏掉隐藏在响应里的 Key。',
         result: '把“查找—复制—保存—导出”变成一个面板内的轻量流程。',
@@ -86,7 +88,7 @@ export const categories = {
         tagline: '把图片队列转化为镜头、焦距、色调、光影等结构化摄影语言。',
         type: 'IMAGE ANNOTATION STUDIO',
         accent: '#61a5ff',
-        preview: automationAsset('screens/image-annotation.png'),
+        preview: automationAsset('screens/image-annotation.webp'),
         videos: [
           { label: '图片描述演示 · 男生素材', path: 'videos/video-description-demo-full.mp4' }
         ],
@@ -105,7 +107,7 @@ export const categories = {
         tagline: '识别页面视频直链，并把多条链接变成可追踪的并发下载任务。',
         type: 'BATCH VIDEO',
         accent: '#8b5cf6',
-        preview: automationAsset('screens/video-batch-download.png'),
+        preview: automationAsset('screens/video-batch-download.webp'),
         what: '面向网页视频素材收集的 Chrome 扩展。它可以识别当前页面中的视频链接，支持设置并发数、下载文件夹、任务重试和结果导出。',
         problem: '逐条打开链接、重复点击保存，既打断工作节奏，也很难确认大批任务中哪些已经完成、哪些需要重试。',
         result: '用一个清晰的任务面板替代重复操作，让批量下载的结果始终可见。',
@@ -121,7 +123,7 @@ export const categories = {
         tagline: '观看视频的同时，用快捷键留下准确的入点与出点。',
         type: 'VIDEO TIMESTAMP',
         accent: '#22a7f0',
-        preview: automationAsset('screens/video-timestamp.png'),
+        preview: automationAsset('screens/video-timestamp.webp'),
         what: '一款针对网页视频的片段时间戳工具。播放过程中可用快捷键记录入点与出点，并在侧边栏集中管理、整理和导出片段。',
         problem: '依靠暂停、抄写时间码和手工整理片段，操作频繁且容易出现时间偏差；长视频或多片段任务尤其低效。',
         result: '让“观看—判断—标记”保持在同一节奏里，为剪辑、审核和内容拆条快速建立片段清单。',
@@ -137,7 +139,7 @@ export const categories = {
         tagline: '把 1 分钟内的视频拆成连续分镜，生成构图、主体、动作、运镜、色调与氛围描述。',
         type: 'VIDEO DESCRIPTION STUDIO',
         accent: '#5b6cff',
-        preview: automationAsset('screens/video-description.png'),
+        preview: automationAsset('screens/video-description.webp'),
         videos: [
           { label: '分镜演示 · 完整流程', path: 'videos/video-description-demo.mp4' }
         ],
@@ -156,7 +158,7 @@ export const categories = {
         tagline: '批量扫描本地视频样本，用多模态模型先完成类型预筛，再把低置信度样本交给人工复核。',
         type: 'AI VIDEO CLASSIFIER',
         accent: '#77b7ff',
-        preview: automationAsset('screens/video-preclassification.png'),
+        preview: automationAsset('screens/video-preclassification.webp'),
         what: '一套面向视频评测前置筛选的本地自动化工作台。它可以扫描本地视频目录，接入 Demo、Gemini、OpenAI、Claude、OpenAI 兼容接口或自定义 Webhook，对视频内容进行智能预分类，并输出结构化结果。',
         problem: '视频评测样本数量一多，人工逐条观看、判断类型和筛选目标样本会非常耗时；不同评测人员的分类标准也容易不一致，后续复核成本会被放大。',
         result: '用“AI 预分类 + 置信度分流 + 人工复核”的方式，把重复筛选前置自动化，帮助评测人员更快锁定目标样本，并让团队视频评测整体效率提升约 30%。',
@@ -172,7 +174,7 @@ export const categories = {
         tagline: '在多轮评测表里，快速发现分数、空值与结构异常。',
         type: 'QUALITY CONTROL',
         accent: '#4e8cff',
-        preview: automationAsset('screens/evaluation-radar.png'),
+        preview: automationAsset('screens/evaluation-radar.webp'),
         videos: [
           { label: '评测演示 · 精简素材', path: 'videos/video-description-demo-short.mp4' }
         ],
@@ -200,9 +202,9 @@ export const categories = {
         tagline: '衣橱更懂你，每天更像自己',
         type: 'AI FASHION PRODUCT',
         accent: '#d8e8f5',
-        preview: productAsset('evehut/hero.png'),
+        preview: productAsset('evehut/hero.webp'),
         logo: productAsset('evehut/logo.jpg'),
-        covers: [productAsset('evehut/hero.png')],
+        covers: [productAsset('evehut/hero.webp')],
         videos: [{ label: '伊屋 EveHut 产品演示', path: 'evehut/demo.mp4' }],
         website: 'https://evehut77-d4gpnufz05c1e9ec4-1455866191.ap-shanghai.app.tcloudbase.com/',
         what: '一款面向日常穿搭决策的响应式 AI 产品。我独立完成产品规划、视觉设计、前后端开发、AI 服务适配和线上部署，让用户能够管理自己的数字衣橱、获得搭配建议，并通过图片或实时画面评价一套穿搭。',
@@ -251,7 +253,7 @@ const makePhotoItems = (folder, prefix, count, excluded = []) => {
       id: `${folder}-${String(number).padStart(2, '0')}`,
       src: resolveAsset(
         photoAssetUrls,
-        `./assets/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.jpg`
+        `./assets/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.webp`
       ),
       thumbnail: `/thumbs/gallery/${folder}/${prefix}-${String(number).padStart(2, '0')}.webp`
     }));
@@ -287,6 +289,6 @@ export const videoItems = [
 ].map((item) => ({
   ...item,
   src: resolveAsset(videoAssetUrls, `./assets/videos/showreel/${item.id}.mp4`),
-  poster: resolveAsset(videoAssetUrls, `./assets/videos/showreel/posters/${item.id}.png`),
+  poster: resolveAsset(videoAssetUrls, `./assets/videos/showreel/posters/${item.id}.webp`),
   thumbnail: `/thumbs/videos/${item.id}.webp`
 }));

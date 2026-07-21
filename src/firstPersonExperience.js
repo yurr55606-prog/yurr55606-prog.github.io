@@ -6,19 +6,19 @@ import productCubeVideoUrl from './assets/first-person/product-cube-1080.mp4';
 
 const SECTION_VIDEOS = {
   plugin: {
-    url: automationWatchVideoUrl, revealAt: 4.05, width: 2560, height: 1440,
+    url: automationWatchVideoUrl, revealAt: 4.05, width: 1280, height: 720,
     exposure: 0.90, saturation: 0.92, warm: 1.0, cool: 1.0
   },
   video: {
-    url: videoDslrVideoUrl, revealAt: 4.0, width: 2560, height: 1440,
+    url: videoDslrVideoUrl, revealAt: 4.0, width: 1280, height: 720,
     exposure: 1.02, saturation: 0.88, warm: 0.62, cool: 1.12
   },
   photo: {
-    url: photographyFilmVideoUrl, revealAt: 3.92, width: 1920, height: 1080,
+    url: photographyFilmVideoUrl, revealAt: 3.92, width: 1280, height: 720,
     exposure: 1.0, saturation: 0.86, warm: 0.88, cool: 0.94
   },
   product: {
-    url: productCubeVideoUrl, revealAt: 4.08, width: 1920, height: 1080,
+    url: productCubeVideoUrl, revealAt: 4.08, width: 1280, height: 720,
     exposure: 0.95, saturation: 0.78, warm: 1.08, cool: 0.74
   }
 };
@@ -212,7 +212,7 @@ export function createFirstPersonExperience(canvas, options = {}) {
     uniforms: {
       uMap: { value: interactionVideoTexture },
       uOpacity: { value: 0 },
-      uTexelSize: { value: new THREE.Vector2(1 / 2560, 1 / 1440) },
+      uTexelSize: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
       uExposure: { value: 0.9 },
       uSaturation: { value: 0.92 },
       uWarm: { value: 1 },
@@ -451,7 +451,10 @@ export function createFirstPersonExperience(canvas, options = {}) {
     interactionVideo.load();
   };
   const warmup = () => {
-    if (warmupScheduled || navigator.connection?.saveData) return;
+    const connection = navigator.connection;
+    const constrainedNetwork = connection?.saveData
+      || ['slow-2g', '2g', '3g'].includes(connection?.effectiveType);
+    if (warmupScheduled || constrainedNetwork) return;
     warmupScheduled = true;
     const order = ['plugin', 'photo', 'video', 'product'];
     order.forEach((key, index) => {
@@ -467,7 +470,7 @@ export function createFirstPersonExperience(canvas, options = {}) {
         };
         if ('requestIdleCallback' in window) window.requestIdleCallback(schedulePrefetch, { timeout: 1600 });
         else schedulePrefetch();
-      }, index * (compact ? 1100 : 520));
+      }, index * (compact ? 2400 : 900));
     });
   };
   return { open, close, update, resize, preload, warmup,
